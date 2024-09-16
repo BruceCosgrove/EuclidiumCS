@@ -109,22 +109,22 @@ public class VertexBuffer
 
     public VertexBuffer(VertexBufferInfo info)
     {
-        GL gl = Engine.Instance.Window.GL;
+        var vk = Engine.Instance.Window.VK;
 
         _count = info.Count;
         _layout = info.Layout;
 
-        _idVAO = gl.CreateVertexArray();
-        gl.BindVertexArray(_idVAO);
+        //_idVAO = vk.CreateVertexArray();
+        //vk.BindVertexArray(_idVAO);
 
         nuint size = (nuint)(info.Count * sizeof(float));
-        _id = gl.CreateBuffer();
-        gl.BindBuffer(BufferTargetARB.ArrayBuffer, _id);
-        gl.BufferData(BufferTargetARB.ArrayBuffer, size, ReadOnlySpan<byte>.Empty, info.Usage);
+        //_id = vk.CreateBuffer();
+        //vk.BindBuffer(BufferTargetARB.ArrayBuffer, _id);
+        //vk.BufferData(BufferTargetARB.ArrayBuffer, size, ReadOnlySpan<byte>.Empty, info.Usage);
 
         for (uint i = 0; i < _layout.Elements.Count; ++i)
         {
-            gl.EnableVertexAttribArray(i);
+            //vk.EnableVertexAttribArray(i);
             var element = _layout.Elements[(int)i];
             var count = (int)element.Count;
             unsafe
@@ -133,13 +133,13 @@ public class VertexBuffer
                 switch (element.Type)
                 {
                     case VertexAttribPointerType.Float:
-                        gl.VertexAttribPointer(i, count, element.Type, element.Normalized, _layout.Stride, offset);
+                        //vk.VertexAttribPointer(i, count, element.Type, element.Normalized, _layout.Stride, offset);
                         break;
                     case VertexAttribPointerType.Int:
-                        gl.VertexAttribIPointer(i, count, GLEnum.Int, _layout.Stride, offset);
+                        //vk.VertexAttribIPointer(i, count, GLEnum.Int, _layout.Stride, offset);
                         break;
                     case VertexAttribPointerType.UnsignedInt:
-                        gl.VertexAttribIPointer(i, count, GLEnum.UnsignedInt, _layout.Stride, offset);
+                        //vk.VertexAttribIPointer(i, count, GLEnum.UnsignedInt, _layout.Stride, offset);
                         break;
                 }
             }
@@ -147,18 +147,18 @@ public class VertexBuffer
     }
     public void Destroy()
     {
-        GL gl = Engine.Instance.Window.GL;
+        var vk = Engine.Instance.Window.VK;
 
-        gl.DeleteBuffer(_id);
-        gl.DeleteVertexArray(_idVAO);
+        //vk.DeleteBuffer(_id);
+        //vk.DeleteVertexArray(_idVAO);
     }
 
     public void Bind()
     {
-        GL gl = Engine.Instance.Window.GL;
+        var vk = Engine.Instance.Window.VK;
 
-        gl.BindVertexArray(_idVAO);
-        gl.BindBuffer(BufferTargetARB.ArrayBuffer, _id);
+        //vk.BindVertexArray(_idVAO);
+        //vk.BindBuffer(BufferTargetARB.ArrayBuffer, _id);
     }
 
     public void SetData(List<float> data) => SetData(data, data.Count);
@@ -168,9 +168,9 @@ public class VertexBuffer
         Debug.Assert(offset + count <= _count);
         Debug.Assert(0 < count && count <= data.Count);
 
-        GL gl = Engine.Instance.Window.GL;
+        var vk = Engine.Instance.Window.VK;
 
         ReadOnlySpan<float> span = CollectionsMarshal.AsSpan(data);
-        gl.NamedBufferSubData(_id, (nint)offset, (nuint)(count * sizeof(float)), span);
+        //vk.NamedBufferSubData(_id, (nint)offset, (nuint)(count * sizeof(float)), span);
     }
 }

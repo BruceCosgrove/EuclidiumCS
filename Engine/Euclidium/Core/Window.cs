@@ -1,9 +1,10 @@
-﻿using ImGuiNET;
+using ImGuiNET;
 using Silk.NET.GLFW;
 using Silk.NET.Input;
 using Silk.NET.Maths;
 using Silk.NET.OpenGL;
 using Silk.NET.OpenGL.Extensions.ImGui;
+using Silk.NET.Vulkan;
 using Silk.NET.Windowing;
 using System.Numerics;
 
@@ -13,10 +14,10 @@ public sealed class Window
 {
     private readonly IWindow _window;
     private IInputContext? _inputContext;
-    private GL? _gl;
-    private ImGuiController? _imguiController;
+    private Vk? _vk;
+    //private ImGuiController? _imguiController;
     // TODO: The ImGuiController does not do anything about cursors.
-    private Dictionary<ImGuiMouseCursor, nint>? _cursors;
+    //private Dictionary<ImGuiMouseCursor, nint>? _cursors;
     private CursorMode _cursorMode = CursorMode.Normal;
 
     /* Client Events */
@@ -55,7 +56,7 @@ public sealed class Window
     public event Action<Vector2D<int>>? MouseMove;
 
     /* Values */
-    public GL GL => _gl!;
+    public Vk VK => _vk!;
     public IKeyboard Keyboard => _inputContext!.Keyboards[0];
     public IMouse Mouse => _inputContext!.Mice[0];
 
@@ -68,12 +69,12 @@ public sealed class Window
         get => _cursorMode;
         set
         {
-            if (_cursorMode != value)
-            {
-                _cursorMode = value;
-                foreach (var mouse in _inputContext!.Mice)
-                    mouse.Cursor.CursorMode = _cursorMode;
-            }
+            //if (_cursorMode != value)
+            //{
+            //    _cursorMode = value;
+            //    foreach (var mouse in _inputContext!.Mice)
+            //        mouse.Cursor.CursorMode = _cursorMode;
+            //}
         }
     }
 
@@ -92,12 +93,12 @@ public sealed class Window
         }
 
         // Create the window and add event handlers.
-        _window = Silk.NET.Windowing.Window.Create(WindowOptions.Default with
+        _window = Silk.NET.Windowing.Window.Create(WindowOptions.DefaultVulkan with
         {
             //WindowState = WindowState.Fullscreen,
-            WindowState = WindowState.Maximized,
-            WindowBorder = WindowBorder.Hidden,
-        }); // TODO: WindowOptions.DefaultVulkan
+            //WindowState = WindowState.Maximized,
+            //WindowBorder = WindowBorder.Hidden,
+        });
         _window.Load += OnLoad;
         _window.Closing += OnClosing;
         _window.Update += OnUpdate;
@@ -144,46 +145,46 @@ public sealed class Window
         // UPDATE: The ImGuiController can just be rewritten
         // using imgui's vulkan backend as an example.
 
-        _gl = _window.CreateOpenGL();
-        _imguiController = new ImGuiController(_gl, _window, _inputContext, () =>
-        {
-            var io = ImGui.GetIO();
-            var style = ImGui.GetStyle();
+        _vk = Vk.GetApi();
+        //_imguiController = new ImGuiController(_gl, _window, _inputContext, () =>
+        //{
+        //    var io = ImGui.GetIO();
+        //    var style = ImGui.GetStyle();
 
-            io.Fonts.AddFontFromFileTTF("./Resources/Fonts/OpenSans/OpenSans-Regular.ttf", 18f);
+        //    io.Fonts.AddFontFromFileTTF("./Resources/Fonts/OpenSans/OpenSans-Regular.ttf", 18f);
 
-            io.ConfigFlags |=
-                ImGuiConfigFlags.DockingEnable |
-                ImGuiConfigFlags.ViewportsEnable;
-            io.BackendFlags |= ImGuiBackendFlags.HasMouseCursors;
-            io.ConfigWindowsMoveFromTitleBarOnly = true;
-            io.ConfigWindowsResizeFromEdges = true;
+        //    io.ConfigFlags |=
+        //        ImGuiConfigFlags.DockingEnable |
+        //        ImGuiConfigFlags.ViewportsEnable;
+        //    io.BackendFlags |= ImGuiBackendFlags.HasMouseCursors;
+        //    io.ConfigWindowsMoveFromTitleBarOnly = true;
+        //    io.ConfigWindowsResizeFromEdges = true;
 
-            style.ItemSpacing = new(4f);
-            style.FramePadding = new(4f);
-            style.WindowPadding = new(4f);
-            style.WindowRounding = 0f;
-            style.WindowBorderSize = 0f;
-            style.WindowMenuButtonPosition = ImGuiDir.None;
-        });
+        //    style.ItemSpacing = new(4f);
+        //    style.FramePadding = new(4f);
+        //    style.WindowPadding = new(4f);
+        //    style.WindowRounding = 0f;
+        //    style.WindowBorderSize = 0f;
+        //    style.WindowMenuButtonPosition = ImGuiDir.None;
+        //});
 
         // TODO: The ImGuiController does not do anything about cursors.
-        unsafe
-        {
-            var glfw = Glfw.GetApi();
-            _cursors = new()
-            {
-                [ImGuiMouseCursor.Arrow]      = (nint)glfw.CreateStandardCursor(CursorShape.Arrow),
-                [ImGuiMouseCursor.TextInput]  = (nint)glfw.CreateStandardCursor(CursorShape.IBeam),
-                [ImGuiMouseCursor.ResizeAll]  = (nint)glfw.CreateStandardCursor(CursorShape.AllResize),
-                [ImGuiMouseCursor.ResizeNS]   = (nint)glfw.CreateStandardCursor(CursorShape.VResize),
-                [ImGuiMouseCursor.ResizeEW]   = (nint)glfw.CreateStandardCursor(CursorShape.HResize),
-                [ImGuiMouseCursor.ResizeNESW] = (nint)glfw.CreateStandardCursor(CursorShape.NeswResize),
-                [ImGuiMouseCursor.ResizeNWSE] = (nint)glfw.CreateStandardCursor(CursorShape.NwseResize),
-                [ImGuiMouseCursor.Hand]       = (nint)glfw.CreateStandardCursor(CursorShape.Hand),
-                [ImGuiMouseCursor.NotAllowed] = (nint)glfw.CreateStandardCursor(CursorShape.NotAllowed),
-            };
-        }
+        //unsafe
+        //{
+        //    var glfw = Glfw.GetApi();
+        //    _cursors = new()
+        //    {
+        //        [ImGuiMouseCursor.Arrow]      = (nint)glfw.CreateStandardCursor(CursorShape.Arrow),
+        //        [ImGuiMouseCursor.TextInput]  = (nint)glfw.CreateStandardCursor(CursorShape.IBeam),
+        //        [ImGuiMouseCursor.ResizeAll]  = (nint)glfw.CreateStandardCursor(CursorShape.AllResize),
+        //        [ImGuiMouseCursor.ResizeNS]   = (nint)glfw.CreateStandardCursor(CursorShape.VResize),
+        //        [ImGuiMouseCursor.ResizeEW]   = (nint)glfw.CreateStandardCursor(CursorShape.HResize),
+        //        [ImGuiMouseCursor.ResizeNESW] = (nint)glfw.CreateStandardCursor(CursorShape.NeswResize),
+        //        [ImGuiMouseCursor.ResizeNWSE] = (nint)glfw.CreateStandardCursor(CursorShape.NwseResize),
+        //        [ImGuiMouseCursor.Hand]       = (nint)glfw.CreateStandardCursor(CursorShape.Hand),
+        //        [ImGuiMouseCursor.NotAllowed] = (nint)glfw.CreateStandardCursor(CursorShape.NotAllowed),
+        //    };
+        //}
 
         RenderInit?.Invoke();
         OnResize(_window.Size);
@@ -193,14 +194,14 @@ public sealed class Window
     private void OnClosing()
     {
         // TODO: The ImGuiController does not do anything about cursors.
-        unsafe
-        {
-            var glfw = Glfw.GetApi();
-            foreach (var (_, cursor) in _cursors!)
-                glfw.DestroyCursor((Cursor*)cursor);
-        }
+        //unsafe
+        //{
+        //    var glfw = Glfw.GetApi();
+        //    foreach (var (_, cursor) in _cursors!)
+        //        glfw.DestroyCursor((Cursor*)cursor);
+        //}
 
-        ImGui.SaveIniSettingsToDisk("./imgui.ini");
+        //ImGui.SaveIniSettingsToDisk("./imgui.ini");
     }
 
     private void OnUpdate(double deltaTime)
@@ -212,27 +213,27 @@ public sealed class Window
     {
         Render?.Invoke(deltaTime);
 
-        _imguiController!.Update((float)deltaTime);
-        ImGuiRender?.Invoke();
+        //_imguiController!.Update((float)deltaTime);
+        //ImGuiRender?.Invoke();
 
-        // TODO: The ImGuiController does not do anything about cursors.
-        unsafe
-        {
-            var glfw = Glfw.GetApi();
-            var window = (WindowHandle*)_window.Native!.Glfw!;
-            var cursor = (Cursor*)_cursors![ImGui.GetMouseCursor()];
-            glfw.SetCursor(window, cursor);
-        }
+        //// TODO: The ImGuiController does not do anything about cursors.
+        //unsafe
+        //{
+        //    var glfw = Glfw.GetApi();
+        //    var window = (WindowHandle*)_window.Native!.Glfw!;
+        //    var cursor = (Cursor*)_cursors![ImGui.GetMouseCursor()];
+        //    glfw.SetCursor(window, cursor);
+        //}
 
-        _imguiController!.Render();
+        //_imguiController!.Render();
 
         // This is really dumb; apparently, Silk.NET.Windowing.Window
         // calls its Render event one time AFTER it's flagged to close.
         if (_window.IsClosing)
         {
             RenderShutdown?.Invoke();
-            _imguiController!.Dispose();
-            _gl!.Dispose();
+            //_imguiController!.Dispose();
+            _vk!.Dispose();
             _inputContext!.Dispose();
         }
     }

@@ -23,28 +23,28 @@ public class IndexBuffer
 
     public IndexBuffer(IndexBufferInfo info)
     {
-        GL gl = Engine.Instance.Window.GL;
+        var vk = Engine.Instance.Window.VK;
 
         _type = info.Type;
         _count = info.Count;
-        _id = gl.CreateBuffer();
+        //_id = vk.CreateBuffer();
         nuint size = GetSize(_type, info.Count);
-        gl.BindBuffer(BufferTargetARB.ElementArrayBuffer, _id);
-        gl.BufferData(BufferTargetARB.ElementArrayBuffer, size, ReadOnlySpan<byte>.Empty, info.Usage);
+        //vk.BindBuffer(BufferTargetARB.ElementArrayBuffer, _id);
+        //vk.BufferData(BufferTargetARB.ElementArrayBuffer, size, ReadOnlySpan<byte>.Empty, info.Usage);
     }
 
     public void Destroy()
     {
-        GL gl = Engine.Instance.Window.GL;
+        var vk = Engine.Instance.Window.VK;
 
-        gl.DeleteBuffer(_id);
+        //vk.DeleteBuffer(_id);
     }
 
     public void Bind()
     {
-        GL gl = Engine.Instance.Window.GL;
+        var vk = Engine.Instance.Window.VK;
 
-        gl.BindBuffer(BufferTargetARB.ElementArrayBuffer, _id);
+        //vk.BindBuffer(BufferTargetARB.ElementArrayBuffer, _id);
     }
 
     public void SetData(List<byte> data) => SetData(data, data.Count);
@@ -55,10 +55,10 @@ public class IndexBuffer
         Debug.Assert(offset + count <= _count);
         Debug.Assert(0 < count && count <= data.Count);
 
-        GL gl = Engine.Instance.Window.GL;
+        var vk = Engine.Instance.Window.VK;
 
         ReadOnlySpan<byte> span = CollectionsMarshal.AsSpan(data);
-        gl.NamedBufferSubData(_id, (nint)offset, GetSize(_type, count), span);
+        //vk.NamedBufferSubData(_id, (nint)offset, GetSize(_type, count), span);
     }
 
     public void SetData(List<ushort> data) => SetData(data, data.Count);
@@ -69,10 +69,10 @@ public class IndexBuffer
         Debug.Assert(offset + count <= _count);
         Debug.Assert(0 < count && count <= data.Count);
 
-        GL gl = Engine.Instance.Window.GL;
+        var vk = Engine.Instance.Window.VK;
 
         ReadOnlySpan<ushort> span = CollectionsMarshal.AsSpan(data);
-        gl.NamedBufferSubData(_id, (nint)offset, GetSize(_type, count), span);
+        //vk.NamedBufferSubData(_id, (nint)offset, GetSize(_type, count), span);
     }
 
     public void SetData(List<uint> data) => SetData(data, data.Count);
@@ -83,10 +83,10 @@ public class IndexBuffer
         Debug.Assert(offset + count <= _count);
         Debug.Assert(0 < count && count <= data.Count);
 
-        GL gl = Engine.Instance.Window.GL;
+        var vk = Engine.Instance.Window.VK;
 
         ReadOnlySpan<uint> span = CollectionsMarshal.AsSpan(data);
-        gl.NamedBufferSubData(_id, (nint)offset, GetSize(_type, count), span);
+        //vk.NamedBufferSubData(_id, (nint)offset, GetSize(_type, count), span);
     }
 
     private static readonly Dictionary<DrawElementsType, int> s_sizes;

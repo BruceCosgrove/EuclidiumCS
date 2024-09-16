@@ -1,4 +1,4 @@
-﻿using Euclidium.Core;
+using Euclidium.Core;
 using Silk.NET.Maths;
 using Silk.NET.OpenGL;
 
@@ -31,7 +31,7 @@ public class Shader
 
     public Shader(List<ShaderSource> sources)
     {
-        _id = CreateProgram(sources);
+        //_id = CreateProgram(sources);
     }
 
     public Shader(string filepath)
@@ -43,117 +43,117 @@ public class Shader
             if (Path.Exists(path))
                 sources.Add(new ShaderSource(type, File.ReadAllText(path)));
         }
-        _id = CreateProgram(sources);
+        //_id = CreateProgram(sources);
     }
 
     public void Destroy()
     {
-        GL gl = Engine.Instance.Window.GL;
+        var vk = Engine.Instance.Window.VK;
 
-        gl.DeleteProgram(_id);
+        //vk.DeleteProgram(_id);
     }
 
     public void Bind()
     {
-        GL gl = Engine.Instance.Window.GL;
+        var vk = Engine.Instance.Window.VK;
 
-        gl.UseProgram(_id);
+        //vk.UseProgram(_id);
     }
 
     public void SetUniform(string name, Matrix4X4<float> value)
     {
-        GL gl = Engine.Instance.Window.GL;
+        var vk = Engine.Instance.Window.VK;
 
         unsafe
         {
-            gl.UniformMatrix4(GetUniformLocation(name), 1, false, (float*)&value);
+            //vk.UniformMatrix4(GetUniformLocation(name), 1, false, (float*)&value);
         }
     }
 
     public void SetUniform(string name, float value)
     {
-        GL gl = Engine.Instance.Window.GL;
+        var vk = Engine.Instance.Window.VK;
 
-        gl.Uniform1(GetUniformLocation(name), value);
+        //vk.Uniform1(GetUniformLocation(name), value);
     }
 
-    private static uint CreateProgram(List<ShaderSource> sources)
-    {
-        GL gl = Engine.Instance.Window.GL;
+    //private static uint CreateProgram(List<ShaderSource> sources)
+    //{
+    //    var vk = Engine.Instance.Window.VK;
 
-        uint program = gl.CreateProgram();
-        bool success = true;
+    //    //uint program = vk.CreateProgram();
+    //    bool success = true;
 
-        List<uint> shaders = sources.ConvertAll(source =>
-        {
-            uint shader = CompileShader(source, ref success);
-            gl.AttachShader(program, shader);
-            return shader;
-        });
+    //    List<uint> shaders = sources.ConvertAll(source =>
+    //    {
+    //        uint shader = CompileShader(source, ref success);
+    //        //vk.AttachShader(program, shader);
+    //        return shader;
+    //    });
 
-        if (success)
-        {
-            gl.LinkProgram(program);
-            string programInfoLog = gl.GetProgramInfoLog(program);
-            if (programInfoLog.Length > 0)
-            {
-                Console.Error.WriteLine($"Program: {programInfoLog}");
-                success = false;
-            }
-            else
-            {
-                gl.ValidateProgram(program);
-                programInfoLog = gl.GetProgramInfoLog(program);
-                if (programInfoLog.Length > 0)
-                {
-                    Console.Error.WriteLine($"Program: {programInfoLog}");
-                    success = false;
-                }
-            }
-        }
+    //    if (success)
+    //    {
+    //        //vk.LinkProgram(program);
+    //        //string programInfoLog = vk.GetProgramInfoLog(program);
+    //        if (programInfoLog.Length > 0)
+    //        {
+    //            Console.Error.WriteLine($"Program: {programInfoLog}");
+    //            success = false;
+    //        }
+    //        else
+    //        {
+    //            //vk.ValidateProgram(program);
+    //            //programInfoLog = vk.GetProgramInfoLog(program);
+    //            if (programInfoLog.Length > 0)
+    //            {
+    //                Console.Error.WriteLine($"Program: {programInfoLog}");
+    //                success = false;
+    //            }
+    //        }
+    //    }
 
-        // Do this regardles of success.
-        shaders.ForEach(shader =>
-        {
-            gl.DetachShader(program, shader);
-            gl.DeleteShader(shader);
-        });
+    //    // Do this regardles of success.
+    //    shaders.ForEach(shader =>
+    //    {
+    //        //vk.DetachShader(program, shader);
+    //        //vk.DeleteShader(shader);
+    //    });
 
-        if (!success)
-        {
-            gl.DeleteProgram(program);
-            program = 0;
-        }
+    //    if (!success)
+    //    {
+    //        //vk.DeleteProgram(program);
+    //        program = 0;
+    //    }
 
-        return program;
-    }
+    //    return program;
+    //}
 
-    private static uint CompileShader(ShaderSource source, ref bool success)
-    {
-        GL gl = Engine.Instance.Window.GL;
+    //private static uint CompileShader(ShaderSource source, ref bool success)
+    //{
+    //    var vk = Engine.Instance.Window.VK;
 
-        uint shader = gl.CreateShader(source.Type);
-        gl.ShaderSource(shader, source.Code);
+    //    //uint shader = vk.CreateShader(source.Type);
+    //    //vk.ShaderSource(shader, source.Code);
 
-        gl.CompileShader(shader);
-        string shaderInfoLog = gl.GetShaderInfoLog(shader);
-        if (shaderInfoLog.Length > 0)
-        {
-            Console.Error.WriteLine($"{source.Type}: {shaderInfoLog}");
-            gl.DeleteShader(shader);
-            shader = 0;
-            success = false;
-        }
+    //    //vk.CompileShader(shader);
+    //    //string shaderInfoLog = vk.GetShaderInfoLog(shader);
+    //    if (shaderInfoLog.Length > 0)
+    //    {
+    //        Console.Error.WriteLine($"{source.Type}: {shaderInfoLog}");
+    //        //vk.DeleteShader(shader);
+    //        shader = 0;
+    //        success = false;
+    //    }
 
-        return shader;
-    }
+    //    return shader;
+    //}
 
-    private int GetUniformLocation(string name)
-    {
-        GL gl = Engine.Instance.Window.GL;
+    //private int GetUniformLocation(string name)
+    //{
+    //    var vk = Engine.Instance.Window.VK;
 
-        if (!_uniformLocations.TryGetValue(name, out int location))
-            _uniformLocations[name] = location = gl.GetUniformLocation(_id, name);
-        return location;
-    }
+    //    if (!_uniformLocations.TryGetValue(name, out int location))
+    //        //_uniformLocations[name] = location = vk.GetUniformLocation(_id, name);
+    //    return location;
+    //}
 }

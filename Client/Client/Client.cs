@@ -1,11 +1,11 @@
-﻿using Client.Gui;
+using Client.Gui;
 using Client.Gui.Panels;
 using Client.Model;
 using Euclidium.Core;
 using Euclidium.Rendering;
 using ImGuiNET;
 using Silk.NET.Input;
-using Silk.NET.OpenGL;
+using Silk.NET.Vulkan;
 using System.Numerics;
 
 namespace Client;
@@ -13,13 +13,13 @@ namespace Client;
 internal sealed partial class Client
 {
     private static Window Window => Engine.Instance.Window;
-    private static GL GL => Engine.Instance.Window.GL;
+    private static Vk VK => Engine.Instance.Window.VK;
     private static IKeyboard Keyboard => Engine.Instance.Window.Keyboard;
     private static IMouse Mouse => Engine.Instance.Window.Mouse;
 
     private Euclidium.Rendering.Framebuffer? _framebuffer;
-    private Euclidium.Rendering.Shader? _slicingShader;
-    private Euclidium.Rendering.Shader? _projectingShader;
+    private Shader? _slicingShader;
+    private Shader? _projectingShader;
     private VertexBuffer? _vertexBuffer;
     private IndexBuffer? _cellIndexBuffer;
     private IndexBuffer? _edgeIndexBuffer;
@@ -38,129 +38,129 @@ internal sealed partial class Client
 
     protected override void InitializeCallbacks()
     {
-        Window.RenderInit += OnRenderInit;
-        Window.RenderShutdown += OnRenderShutdown;
-        Window.Update += OnUpdate;
-        Window.Render += OnRender;
-        Window.ImGuiRender += OnImGuiRender;
-        Window.KeyChange += OnKeyChange;
+        //Window.RenderInit += OnRenderInit;
+        //Window.RenderShutdown += OnRenderShutdown;
+        //Window.Update += OnUpdate;
+        //Window.Render += OnRender;
+        //Window.ImGuiRender += OnImGuiRender;
+        //Window.KeyChange += OnKeyChange;
     }
 
     private void OnRenderInit()
     {
-        // Framebuffer
-        Euclidium.Rendering.Framebuffer.Create(new()
-        {
-            Width = (uint)Window.FramebufferSize.X,
-            Height = (uint)Window.FramebufferSize.Y,
-            ColorAttachments = [new(FramebufferFormat.Ru8_Gu8_Bu8_Au8)],
-            DepthAttachment = new(FramebufferFormat.Du24_Su8),
-        }, out _framebuffer!);
+        //// Framebuffer
+        //Euclidium.Rendering.Framebuffer.Create(new()
+        //{
+        //    Width = (uint)Window.FramebufferSize.X,
+        //    Height = (uint)Window.FramebufferSize.Y,
+        //    ColorAttachments = [new(FramebufferFormat.Ru8_Gu8_Bu8_Au8)],
+        //    DepthAttachment = new(FramebufferFormat.Du24_Su8),
+        //}, out _framebuffer!);
 
-        // Shaders
-        _slicingShader = new("./Resources/Shaders/Slicing4D");
-        _projectingShader = new("./Resources/Shaders/Projecting4D");
+        //// Shaders
+        //_slicingShader = new("./Resources/Shaders/Slicing4D");
+        //_projectingShader = new("./Resources/Shaders/Projecting4D");
 
-        // Vertex buffer
-        var layout = new VertexBufferLayout
-        ([
-            new(VertexBufferElementType.Float4),
-            new(VertexBufferElementType.Float4),
-        ]);
-        _vertexBuffer = new(new(layout, MaxVertexCount, BufferUsageARB.StaticDraw));
+        //// Vertex buffer
+        //var layout = new VertexBufferLayout
+        //([
+        //    new(VertexBufferElementType.Float4),
+        //    new(VertexBufferElementType.Float4),
+        //]);
+        //_vertexBuffer = new(new(layout, MaxVertexCount, BufferUsageARB.StaticDraw));
 
-        // Index buffers
-        _cellIndexBuffer = new(new(DrawElementsType.UnsignedInt, MaxIndexCount, BufferUsageARB.DynamicDraw));
-        _edgeIndexBuffer = new(new(DrawElementsType.UnsignedInt, MaxIndexCount, BufferUsageARB.DynamicDraw));
+        //// Index buffers
+        //_cellIndexBuffer = new(new(DrawElementsType.UnsignedInt, MaxIndexCount, BufferUsageARB.DynamicDraw));
+        //_edgeIndexBuffer = new(new(DrawElementsType.UnsignedInt, MaxIndexCount, BufferUsageARB.DynamicDraw));
 
-        // Camera controller
-        _cameraController = new(float.DegreesToRadians(90.0f), 0.001f, 1000.0f)
-        {
-            Position = new(0f, 0f, 2f, 0f),
-            //Rotation4D = new(0f, 0f, float.DegreesToRadians(20f)),
-        };
-        Window.Update += _cameraController.OnUpdate;
-        Window.KeyChange += _cameraController.OnKeyChange;
-        Window.MouseMove += _cameraController.OnMouseMove;
-        Window.MouseButtonChange += _cameraController.OnMouseButtonChange;
+        //// Camera controller
+        //_cameraController = new(float.DegreesToRadians(90.0f), 0.001f, 1000.0f)
+        //{
+        //    Position = new(0f, 0f, 2f, 0f),
+        //    //Rotation4D = new(0f, 0f, float.DegreesToRadians(20f)),
+        //};
+        //Window.Update += _cameraController.OnUpdate;
+        //Window.KeyChange += _cameraController.OnKeyChange;
+        //Window.MouseMove += _cameraController.OnMouseMove;
+        //Window.MouseButtonChange += _cameraController.OnMouseButtonChange;
 
-        // Panels
-        _panelController = new();
-        _panelController.AddPanel(_propertiesPanel = new(_cameraController));
-        _panelController.AddPanel(_viewportPanel = new(_cameraController, _framebuffer));
-        _panelController.AddPanel(new DemoPanel());
-        Window.KeyChange += _panelController.OnKeyChange;
-        Window.MouseButtonChange += _panelController.OnMouseButtonChange;
+        //// Panels
+        //_panelController = new();
+        //_panelController.AddPanel(_propertiesPanel = new(_cameraController));
+        //_panelController.AddPanel(_viewportPanel = new(_cameraController, _framebuffer));
+        //_panelController.AddPanel(new DemoPanel());
+        //Window.KeyChange += _panelController.OnKeyChange;
+        //Window.MouseButtonChange += _panelController.OnMouseButtonChange;
     }
 
     private void OnRenderShutdown()
     {
-        _framebuffer!.Destroy();
-        _slicingShader!.Destroy();
-        _projectingShader!.Destroy();
-        _vertexBuffer!.Destroy();
-        _cellIndexBuffer!.Destroy();
-        _edgeIndexBuffer!.Destroy();
+        //_framebuffer!.Destroy();
+        //_slicingShader!.Destroy();
+        //_projectingShader!.Destroy();
+        //_vertexBuffer!.Destroy();
+        //_cellIndexBuffer!.Destroy();
+        //_edgeIndexBuffer!.Destroy();
     }
 
     private void OnUpdate(double deltaTime)
     {
-        if (_loadable.IsLoaded)
-        {
-            _loadable.Consume(out _model, out _modelPath);
+        //if (_loadable.IsLoaded)
+        //{
+        //    _loadable.Consume(out _model, out _modelPath);
 
-            _vertexBuffer!.SetData(_model.Vertices);
-            _cellIndexBuffer!.SetData(_model.CellIndices);
-            _edgeIndexBuffer!.SetData(_model.EdgeIndices);
-        }
+        //    _vertexBuffer!.SetData(_model.Vertices);
+        //    _cellIndexBuffer!.SetData(_model.CellIndices);
+        //    _edgeIndexBuffer!.SetData(_model.EdgeIndices);
+        //}
     }
 
     private void OnRender(double deltaTime)
     {
-        if (!_viewportPanel!.Enabled)
-            return;
+        //if (!_viewportPanel!.Enabled)
+        //    return;
 
-        _framebuffer!.Bind();
+        //_framebuffer!.Bind();
 
-        GL.ClearColor(0.3f, 0.5f, 1.0f, 1.0f);
-        GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
+        //GL.ClearColor(0.3f, 0.5f, 1.0f, 1.0f);
+        //GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
 
-        if (_model != null)
-        {
-            GL.Enable(EnableCap.DepthTest);
-            //GL.Enable(EnableCap.CullFace);
-            //GL.Enable(EnableCap.Blend);
-            //GL.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
+        //if (_model != null)
+        //{
+        //    GL.Enable(EnableCap.DepthTest);
+        //    //GL.Enable(EnableCap.CullFace);
+        //    //GL.Enable(EnableCap.Blend);
+        //    //GL.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
 
-            // Same vertex buffer used for both index buffers.
-            _vertexBuffer!.Bind();
+        //    // Same vertex buffer used for both index buffers.
+        //    _vertexBuffer!.Bind();
 
-            // Render sliced tetrahedra.
-            _slicingShader!.Bind();
-            _slicingShader!.SetUniform("uRotation4D", _cameraController!.Rotation4DMatrix);
-            // TODO: should this be the position relative to _cameraController.Inner's rotation?
-            _slicingShader!.SetUniform("uPositionW", _cameraController!.Position.W);
-            _slicingShader!.SetUniform("uViewProjection", _cameraController!.ViewProjectionMatrix);
-            _cellIndexBuffer!.Bind();
-            GL.DrawElements(PrimitiveType.LinesAdjacency, (uint)_model.CellIndices.Count, _cellIndexBuffer!.Type, ReadOnlySpan<uint>.Empty);
+        //    // Render sliced tetrahedra.
+        //    _slicingShader!.Bind();
+        //    _slicingShader!.SetUniform("uRotation4D", _cameraController!.Rotation4DMatrix);
+        //    // TODO: should this be the position relative to _cameraController.Inner's rotation?
+        //    _slicingShader!.SetUniform("uPositionW", _cameraController!.Position.W);
+        //    _slicingShader!.SetUniform("uViewProjection", _cameraController!.ViewProjectionMatrix);
+        //    _cellIndexBuffer!.Bind();
+        //    GL.DrawElements(PrimitiveType.LinesAdjacency, (uint)_model.CellIndices.Count, _cellIndexBuffer!.Type, ReadOnlySpan<uint>.Empty);
 
-            // Render projected edges.
-            _projectingShader!.Bind();
-            _projectingShader!.SetUniform("uRotation4D", _cameraController!.Rotation4DMatrix);
-            _projectingShader!.SetUniform("uViewProjection", _cameraController!.ViewProjectionMatrix);
-            _edgeIndexBuffer!.Bind();
-            GL.DrawElements(PrimitiveType.Lines, (uint)_model.EdgeIndices.Count, _edgeIndexBuffer!.Type, ReadOnlySpan<uint>.Empty);
-        }
+        //    // Render projected edges.
+        //    _projectingShader!.Bind();
+        //    _projectingShader!.SetUniform("uRotation4D", _cameraController!.Rotation4DMatrix);
+        //    _projectingShader!.SetUniform("uViewProjection", _cameraController!.ViewProjectionMatrix);
+        //    _edgeIndexBuffer!.Bind();
+        //    GL.DrawElements(PrimitiveType.Lines, (uint)_model.EdgeIndices.Count, _edgeIndexBuffer!.Type, ReadOnlySpan<uint>.Empty);
+        //}
 
-        _framebuffer!.Unbind();
+        //_framebuffer!.Unbind();
     }
 
     private void OnImGuiRender()
     {
-        GL.Viewport(Window.FramebufferSize);
+        //GL.Viewport(Window.FramebufferSize);
 
-        GuiDockspace();
-        _panelController!.OnImGuiRender();
+        //GuiDockspace();
+        //_panelController!.OnImGuiRender();
     }
 
     private void GuiDockspace()

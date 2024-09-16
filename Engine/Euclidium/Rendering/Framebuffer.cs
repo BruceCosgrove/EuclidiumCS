@@ -1,4 +1,4 @@
-﻿using Euclidium.Core;
+using Euclidium.Core;
 using Silk.NET.Maths;
 using Silk.NET.OpenGL;
 using System.Runtime.InteropServices;
@@ -69,28 +69,28 @@ public class Framebuffer
         if (info.ColorAttachments.Count == 0 && info.DepthAttachment.Format == FramebufferFormat.None)
             return false;
 
-        GL gl = Engine.Instance.Window.GL;
+        var vk = Engine.Instance.Window.VK;
 
         // Create the framebuffer itself.
-        uint framebufferID = gl.CreateFramebuffer();
-        gl.BindFramebuffer(FramebufferTarget.Framebuffer, framebufferID);
+        //uint framebufferID = vk.CreateFramebuffer();
+        //vk.BindFramebuffer(FramebufferTarget.Framebuffer, framebufferID);
 
         // Create its color attachments.
         List<uint> colorAttachmentIDs = new(new uint[info.ColorAttachments.Count]);
-        gl.CreateTextures(TextureTarget.Texture2D, CollectionsMarshal.AsSpan(colorAttachmentIDs));
+        //vk.CreateTextures(TextureTarget.Texture2D, CollectionsMarshal.AsSpan(colorAttachmentIDs));
         for (int i = 0; i < info.ColorAttachments.Count; ++i)
         {
             var colorAttachmentInfo = info.ColorAttachments[i];
             var colorAttachmentID = colorAttachmentIDs[i];
             var (format, internalFormat, type) = s_colorFormats[colorAttachmentInfo.Format];
 
-            gl.BindTexture(TextureTarget.Texture2D, colorAttachmentID);
-            gl.TexImage2D(TextureTarget.Texture2D, 0, internalFormat, info.Width, info.Height, 0, format, type, ReadOnlySpan<byte>.Empty);
-            gl.TextureParameter(colorAttachmentID, GLEnum.TextureMinFilter, (int)colorAttachmentInfo.MinFilter);
-            gl.TextureParameter(colorAttachmentID, GLEnum.TextureMagFilter, (int)colorAttachmentInfo.MagFilter);
-            gl.TextureParameter(colorAttachmentID, GLEnum.TextureWrapS, (int)colorAttachmentInfo.HorizontalWrapMode);
-            gl.TextureParameter(colorAttachmentID, GLEnum.TextureWrapT, (int)colorAttachmentInfo.VerticalWrapMode);
-            gl.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0 + i, TextureTarget.Texture2D, colorAttachmentID, 0);
+            //vk.BindTexture(TextureTarget.Texture2D, colorAttachmentID);
+            //vk.TexImage2D(TextureTarget.Texture2D, 0, internalFormat, info.Width, info.Height, 0, format, type, ReadOnlySpan<byte>.Empty);
+            //vk.TextureParameter(colorAttachmentID, GLEnum.TextureMinFilter, (int)colorAttachmentInfo.MinFilter);
+            //vk.TextureParameter(colorAttachmentID, GLEnum.TextureMagFilter, (int)colorAttachmentInfo.MagFilter);
+            //vk.TextureParameter(colorAttachmentID, GLEnum.TextureWrapS, (int)colorAttachmentInfo.HorizontalWrapMode);
+            //vk.TextureParameter(colorAttachmentID, GLEnum.TextureWrapT, (int)colorAttachmentInfo.VerticalWrapMode);
+            //vk.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0 + i, TextureTarget.Texture2D, colorAttachmentID, 0);
         }
 
         // Create its depth attachment.
@@ -100,14 +100,14 @@ public class Framebuffer
             var depthAttachmentInfo = info.DepthAttachment;
             var (internalFormat, kind) = s_depthFormats[depthAttachmentInfo.Format];
 
-            depthAttachmentID = gl.CreateTexture(TextureTarget.Texture2D);
-            gl.BindTexture(TextureTarget.Texture2D, depthAttachmentID);
-            gl.TextureStorage2D(depthAttachmentID, 1, (GLEnum)internalFormat, info.Width, info.Height);
-            gl.TextureParameter(depthAttachmentID, GLEnum.TextureMinFilter, (int)depthAttachmentInfo.MinFilter);
-            gl.TextureParameter(depthAttachmentID, GLEnum.TextureMagFilter, (int)depthAttachmentInfo.MagFilter);
-            gl.TextureParameter(depthAttachmentID, GLEnum.TextureWrapS, (int)depthAttachmentInfo.HorizontalWrapMode);
-            gl.TextureParameter(depthAttachmentID, GLEnum.TextureWrapT, (int)depthAttachmentInfo.VerticalWrapMode);
-            gl.FramebufferTexture2D(FramebufferTarget.Framebuffer, kind, TextureTarget.Texture2D, depthAttachmentID, 0);
+            //depthAttachmentID = vk.CreateTexture(TextureTarget.Texture2D);
+            //vk.BindTexture(TextureTarget.Texture2D, depthAttachmentID);
+            //vk.TextureStorage2D(depthAttachmentID, 1, (GLEnum)internalFormat, info.Width, info.Height);
+            //vk.TextureParameter(depthAttachmentID, GLEnum.TextureMinFilter, (int)depthAttachmentInfo.MinFilter);
+            //vk.TextureParameter(depthAttachmentID, GLEnum.TextureMagFilter, (int)depthAttachmentInfo.MagFilter);
+            //vk.TextureParameter(depthAttachmentID, GLEnum.TextureWrapS, (int)depthAttachmentInfo.HorizontalWrapMode);
+            //vk.TextureParameter(depthAttachmentID, GLEnum.TextureWrapT, (int)depthAttachmentInfo.VerticalWrapMode);
+            //vk.FramebufferTexture2D(FramebufferTarget.Framebuffer, kind, TextureTarget.Texture2D, depthAttachmentID, 0);
         }
 
         // Set the draw buffers appropriately (only color attachments matter).
@@ -115,24 +115,24 @@ public class Framebuffer
         {
             var buffers = Enumerable.Range(0, info.ColorAttachments.Count).ToList()
                 .ConvertAll(i => DrawBufferMode.ColorAttachment0 + i);
-            gl.DrawBuffers(CollectionsMarshal.AsSpan(buffers));
+            //vk.DrawBuffers(CollectionsMarshal.AsSpan(buffers));
         }
         else
         {
-            gl.DrawBuffer(DrawBufferMode.None);
+            //vk.DrawBuffer(DrawBufferMode.None);
         }
 
-        gl.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
+        //vk.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
 
-        Framebuffer result = new(info, framebufferID, colorAttachmentIDs, depthAttachmentID);
-        if (gl.CheckFramebufferStatus(FramebufferTarget.Framebuffer) != GLEnum.FramebufferComplete)
-        {
-            Console.Error.WriteLine("Framebuffer incomplete.");
-            result.Destroy();
-            return false;
-        }
+        //Framebuffer result = new(info, framebufferID, colorAttachmentIDs, depthAttachmentID);
+        //if (vk.CheckFramebufferStatus(FramebufferTarget.Framebuffer) != GLEnum.FramebufferComplete)
+        //{
+        //    Console.Error.WriteLine("Framebuffer incomplete.");
+        //    result.Destroy();
+        //    return false;
+        //}
 
-        framebuffer = result;
+        //framebuffer = result;
         return true;
     }
 
@@ -151,26 +151,26 @@ public class Framebuffer
 
     public void Destroy()
     {
-        GL gl = Engine.Instance.Window.GL;
+        var vk = Engine.Instance.Window.VK;
 
-        gl.DeleteTexture(_depthAttachmentID);
-        gl.DeleteTextures(CollectionsMarshal.AsSpan(_colorAttachmentIDs));
-        gl.DeleteFramebuffer(_framebufferID);
+        //vk.DeleteTexture(_depthAttachmentID);
+        //vk.DeleteTextures(CollectionsMarshal.AsSpan(_colorAttachmentIDs));
+        //vk.DeleteFramebuffer(_framebufferID);
     }
 
     public void Bind()
     {
-        GL gl = Engine.Instance.Window.GL;
+        var vk = Engine.Instance.Window.VK;
 
-        gl.BindFramebuffer(FramebufferTarget.Framebuffer, _framebufferID);
-        gl.Viewport(0, 0, _info.Width, _info.Height);
+        //vk.BindFramebuffer(FramebufferTarget.Framebuffer, _framebufferID);
+        //vk.Viewport(0, 0, _info.Width, _info.Height);
     }
 
     public void Unbind()
     {
-        GL gl = Engine.Instance.Window.GL;
+        var vk = Engine.Instance.Window.VK;
 
-        gl.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
+        //vk.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
     }
 
     public uint GetColorAttachment(int index = 0) => _colorAttachmentIDs[index];
