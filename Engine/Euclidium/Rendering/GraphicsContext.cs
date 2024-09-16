@@ -8,11 +8,19 @@ using Silk.NET.Vulkan.Extensions.EXT;
 
 namespace Euclidium.Rendering;
 
+file struct QueueFamilyIndices
+{
+    public uint? GraphicsFamily;
+
+    public readonly bool IsComplete => GraphicsFamily.HasValue;
+}
+
 public sealed class GraphicsContext : IDisposable
 {
     private Vk? _vk;
     private IVkSurface? _surface; // Not owned, just a reference.
     private Instance _instance;
+    private PhysicalDevice _physicalDevice;
 
 #if DEBUG
     private ExtDebugUtils? _debugUtils;
@@ -106,6 +114,9 @@ public sealed class GraphicsContext : IDisposable
             Environment.Exit(1);
         }
 
+        // Finish creating debug messenger.
+        // TODO: IDK why, but the above "PNext = &debugUtilsMessengerCreateInfoEXT,"
+        // is sufficient and required to create the messenger, so this seems useless.
 #if DEBUG
         if (_vk.TryGetInstanceExtension(_instance, out _debugUtils))
         {
@@ -118,6 +129,16 @@ public sealed class GraphicsContext : IDisposable
             }
         }
 #endif
+
+        // Pick the physical device.
+        var devices = _vk.GetPhysicalDevices(_instance).ToList();
+        _physicalDevice = devices.Find(IsPhysicalDeviceSuitable);
+
+        if (_physicalDevice.Handle == 0)
+        {
+            Console.Error.WriteLine("No suitable physical device found.");
+            Environment.Exit(1);
+        }
     }
 
     public unsafe void Dispose()
@@ -172,4 +193,23 @@ public sealed class GraphicsContext : IDisposable
         return Vk.False;
     }
 #endif
+
+    private unsafe bool IsPhysicalDeviceSuitable(PhysicalDevice physicalDevice)
+    {
+        QueueFamilyIndices indices = new();
+
+        uint queueFamilyCount = 0;
+        _vk!.GetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, null);
+        var queueFamilies = new QueueFamilyProperties[queueFamilyCount];
+        _vk!.GetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, queueFamilies);
+
+        for (uint i = 0; i < queueFamilyCount && !indices.IsComplete; ++i)
+        {
+            var queueFamily = queueFamilies[i];
+            if (queueFamily.QueueFlags.HasFlag(QueueFlags.GraphicsBit))
+                indices.GraphicsFamily = i;
+        }
+
+        return indices.IsComplete;
+    }
 }
