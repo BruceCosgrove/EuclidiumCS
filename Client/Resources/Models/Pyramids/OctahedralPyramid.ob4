@@ -1,0 +1,22 @@
+v -0.500000  0.000000  0.000000 -0.500000 # left
+v  0.000000 -0.500000  0.000000 -0.500000 # bottom
+v  0.000000  0.000000 -0.500000 -0.500000 # back
+v  0.500000  0.000000  0.000000 -0.500000 # right
+v  0.000000  0.500000  0.000000 -0.500000 # top
+v  0.000000  0.000000  0.500000 -0.500000 # front
+
+v  0.000000  0.000000  0.000000  0.500000 # top of pyramid
+
+# "base" of the pyramid
+pt Octahedron
+c 1 2 3 4 5 6
+
+pt Tetrahedron
+c 1 2 3 7 # back  bottom left
+c 4 2 3 7 # back  bottom right
+c 1 5 3 7 # back  bottom left
+c 4 5 3 7 # back  bottom right
+c 1 2 6 7 # front bottom left
+c 4 2 6 7 # front bottom right
+c 1 5 6 7 # front bottom left
+c 4 5 6 7 # front bottom right

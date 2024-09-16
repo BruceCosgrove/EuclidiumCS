@@ -1,0 +1,26 @@
+v -0.500000 -0.500000 -0.500000 -0.500000 # outer back  bottom left
+v  0.500000 -0.500000 -0.500000 -0.500000 # outer back  bottom right
+v -0.500000  0.500000 -0.500000 -0.500000 # outer back  top    left
+v  0.500000  0.500000 -0.500000 -0.500000 # outer back  top    right
+v -0.500000 -0.500000  0.500000 -0.500000 # outer front bottom left
+v  0.500000 -0.500000  0.500000 -0.500000 # outer front bottom right
+v -0.500000  0.500000  0.500000 -0.500000 # outer front top    left
+v  0.500000  0.500000  0.500000 -0.500000 # outer front top    right
+v -0.500000 -0.500000 -0.500000  0.500000 # inner back  bottom left
+v  0.500000 -0.500000 -0.500000  0.500000 # inner back  bottom right
+v -0.500000  0.500000 -0.500000  0.500000 # inner back  top    left
+v  0.500000  0.500000 -0.500000  0.500000 # inner back  top    right
+v -0.500000 -0.500000  0.500000  0.500000 # inner front bottom left
+v  0.500000 -0.500000  0.500000  0.500000 # inner front bottom right
+v -0.500000  0.500000  0.500000  0.500000 # inner front top    left
+v  0.500000  0.500000  0.500000  0.500000 # inner front top    right
+
+pt Hexahedron
+c  1  9  3 11  5 13  7 15 # left   cube
+c 10  2 12  4 14  6 16  8 # right  cube
+c  1  2  9 10  5  6 13 14 # bottom cube
+c 11 12  3  4 15 16  7  8 # top    cube
+c  1  2  3  4  9 10 11 12 # back   cube
+c 13 14 15 16  5  6  7  8 # front  cube
+c  1  2  3  4  5  6  7  8 # outer  cube
+c  9 10 11 12 13 14 15 16 # inner  cube

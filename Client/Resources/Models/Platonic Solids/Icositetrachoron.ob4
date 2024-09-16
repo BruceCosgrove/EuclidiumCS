@@ -1,0 +1,58 @@
+# vertices are all permutations of (±0.5,±0.5,0,0)
+v -0.500000 -0.500000  0.000000  0.000000
+v -0.500000  0.000000 -0.500000  0.000000
+v -0.500000  0.000000  0.000000 -0.500000
+v  0.000000 -0.500000 -0.500000  0.000000
+v  0.000000 -0.500000  0.000000 -0.500000
+v  0.000000  0.000000 -0.500000 -0.500000
+
+v -0.500000  0.500000  0.000000  0.000000
+v -0.500000  0.000000  0.500000  0.000000
+v -0.500000  0.000000  0.000000  0.500000
+v  0.000000 -0.500000  0.500000  0.000000
+v  0.000000 -0.500000  0.000000  0.500000
+v  0.000000  0.000000 -0.500000  0.500000
+
+v  0.500000 -0.500000  0.000000  0.000000
+v  0.500000  0.000000 -0.500000  0.000000
+v  0.500000  0.000000  0.000000 -0.500000
+v  0.000000  0.500000 -0.500000  0.000000
+v  0.000000  0.500000  0.000000 -0.500000
+v  0.000000  0.000000  0.500000 -0.500000
+
+v  0.500000  0.500000  0.000000  0.000000
+v  0.500000  0.000000  0.500000  0.000000
+v  0.500000  0.000000  0.000000  0.500000
+v  0.000000  0.500000  0.500000  0.000000
+v  0.000000  0.500000  0.000000  0.500000
+v  0.000000  0.000000  0.500000  0.500000
+
+pt Octahedron
+
+c  3  5  6 15 17 18 # outer-most octahedron
+c  9 11 12 21 23 24 # inner-most octahedron
+
+c  3  1  2  9  7  8 # left outer-mid octahedron
+c 21 13 14 15 19 20 # right outer-mid octahedron
+c  1  5  4 13 11 10 # bottom outer-mid octahedron
+c  7 17 16 19 23 22 # top outer-mid octahedron
+c  2  4  6 14 16 12 # back outer-mid octahedron
+c  8 10 24 20 22 18 # front outer-mid octahedron
+
+c  2  1  4 11 12  9 # left bottom back inner-mid octahedron
+c 11 13  4 14 12 21 # right bottom back inner-mid octahedron
+c  2  9 12 23 16  7 # left top back inner-mid octahedron
+c 23 21 12 14 16 19 # right top back inner-mid octahedron
+c  9  1 11 10 24  8 # left bottom front inner-mid octahedron
+c 10 13 11 21 24 20 # right bottom front inner-mid octahedron
+c  7  8  9 24 23 22 # right bottom front inner-mid octahedron
+c 24 20 21 19 23 22 # right top front inner-mid octahedron
+
+c  6  4  2  1  3  5 # left bottom back outer-mid octahedron
+c 13  4 14  6 15  5 # right bottom back outer-mid octahedron
+c  6  2 16  7 17  3 # left top back outer-mid octahedron
+c 19 14 16  6 17 15 # right top back outer-mid octahedron
+c  3  5  1 10  8 18 # left bottom front outer-mid octahedron
+c 10  5 13 15 20 18 # right bottom front outer-mid octahedron
+c  3  8  7 22 17 18 # left top front outer-mid octahedron
+c 22 20 19 15 17 18 # right top front outer-mid octahedron

@@ -1,0 +1,17 @@
+* text=auto
+
+# Licenses and README
+*.txt text
+*.md text
+
+# Code
+*.cs text
+
+# Visual Studio
+*.csproj text
+*.sln text
+
+# Resources
+*.ob4 text
+*.glsl text
+*.ttf binary
