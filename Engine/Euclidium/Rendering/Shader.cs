@@ -48,21 +48,21 @@ public class Shader
 
     public void Destroy()
     {
-        var vk = Engine.Instance.Window.VK;
+        //var vk = Engine.Instance.Window.VK;
 
         //vk.DeleteProgram(_id);
     }
 
     public void Bind()
     {
-        var vk = Engine.Instance.Window.VK;
+        //var vk = Engine.Instance.Window.VK;
 
         //vk.UseProgram(_id);
     }
 
     public void SetUniform(string name, Matrix4X4<float> value)
     {
-        var vk = Engine.Instance.Window.VK;
+        //var vk = Engine.Instance.Window.VK;
 
         unsafe
         {
@@ -72,14 +72,14 @@ public class Shader
 
     public void SetUniform(string name, float value)
     {
-        var vk = Engine.Instance.Window.VK;
+        //var vk = Engine.Instance.Window.VK;
 
         //vk.Uniform1(GetUniformLocation(name), value);
     }
 
     //private static uint CreateProgram(List<ShaderSource> sources)
     //{
-    //    var vk = Engine.Instance.Window.VK;
+    //    //var vk = Engine.Instance.Window.VK;
 
     //    //uint program = vk.CreateProgram();
     //    bool success = true;
@@ -130,7 +130,7 @@ public class Shader
 
     //private static uint CompileShader(ShaderSource source, ref bool success)
     //{
-    //    var vk = Engine.Instance.Window.VK;
+    //    //var vk = Engine.Instance.Window.VK;
 
     //    //uint shader = vk.CreateShader(source.Type);
     //    //vk.ShaderSource(shader, source.Code);
@@ -150,7 +150,7 @@ public class Shader
 
     //private int GetUniformLocation(string name)
     //{
-    //    var vk = Engine.Instance.Window.VK;
+    //    //var vk = Engine.Instance.Window.VK;
 
     //    if (!_uniformLocations.TryGetValue(name, out int location))
     //        //_uniformLocations[name] = location = vk.GetUniformLocation(_id, name);

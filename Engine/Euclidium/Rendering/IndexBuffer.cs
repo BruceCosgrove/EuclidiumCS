@@ -23,7 +23,7 @@ public class IndexBuffer
 
     public IndexBuffer(IndexBufferInfo info)
     {
-        var vk = Engine.Instance.Window.VK;
+        //var vk = Engine.Instance.Window.VK;
 
         _type = info.Type;
         _count = info.Count;
@@ -35,14 +35,14 @@ public class IndexBuffer
 
     public void Destroy()
     {
-        var vk = Engine.Instance.Window.VK;
+        //var vk = Engine.Instance.Window.VK;
 
         //vk.DeleteBuffer(_id);
     }
 
     public void Bind()
     {
-        var vk = Engine.Instance.Window.VK;
+        //var vk = Engine.Instance.Window.VK;
 
         //vk.BindBuffer(BufferTargetARB.ElementArrayBuffer, _id);
     }
@@ -55,7 +55,7 @@ public class IndexBuffer
         Debug.Assert(offset + count <= _count);
         Debug.Assert(0 < count && count <= data.Count);
 
-        var vk = Engine.Instance.Window.VK;
+        //var vk = Engine.Instance.Window.VK;
 
         ReadOnlySpan<byte> span = CollectionsMarshal.AsSpan(data);
         //vk.NamedBufferSubData(_id, (nint)offset, GetSize(_type, count), span);
@@ -69,7 +69,7 @@ public class IndexBuffer
         Debug.Assert(offset + count <= _count);
         Debug.Assert(0 < count && count <= data.Count);
 
-        var vk = Engine.Instance.Window.VK;
+        //var vk = Engine.Instance.Window.VK;
 
         ReadOnlySpan<ushort> span = CollectionsMarshal.AsSpan(data);
         //vk.NamedBufferSubData(_id, (nint)offset, GetSize(_type, count), span);
@@ -83,7 +83,7 @@ public class IndexBuffer
         Debug.Assert(offset + count <= _count);
         Debug.Assert(0 < count && count <= data.Count);
 
-        var vk = Engine.Instance.Window.VK;
+        //var vk = Engine.Instance.Window.VK;
 
         ReadOnlySpan<uint> span = CollectionsMarshal.AsSpan(data);
         //vk.NamedBufferSubData(_id, (nint)offset, GetSize(_type, count), span);

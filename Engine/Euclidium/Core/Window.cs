@@ -1,10 +1,6 @@
-using ImGuiNET;
-using Silk.NET.GLFW;
+using Euclidium.Rendering;
 using Silk.NET.Input;
 using Silk.NET.Maths;
-using Silk.NET.OpenGL;
-using Silk.NET.OpenGL.Extensions.ImGui;
-using Silk.NET.Vulkan;
 using Silk.NET.Windowing;
 using System.Numerics;
 
@@ -14,7 +10,8 @@ public sealed class Window
 {
     private readonly IWindow _window;
     private IInputContext? _inputContext;
-    private Vk? _vk;
+    private GraphicsContext? _graphicsContext;
+
     //private ImGuiController? _imguiController;
     // TODO: The ImGuiController does not do anything about cursors.
     //private Dictionary<ImGuiMouseCursor, nint>? _cursors;
@@ -56,7 +53,7 @@ public sealed class Window
     public event Action<Vector2D<int>>? MouseMove;
 
     /* Values */
-    public Vk VK => _vk!;
+    public GraphicsContext GraphicsContext => _graphicsContext!;
     public IKeyboard Keyboard => _inputContext!.Keyboards[0];
     public IMouse Mouse => _inputContext!.Mice[0];
 
@@ -69,12 +66,12 @@ public sealed class Window
         get => _cursorMode;
         set
         {
-            //if (_cursorMode != value)
-            //{
-            //    _cursorMode = value;
-            //    foreach (var mouse in _inputContext!.Mice)
-            //        mouse.Cursor.CursorMode = _cursorMode;
-            //}
+            if (_cursorMode != value)
+            {
+                _cursorMode = value;
+                foreach (var mouse in _inputContext!.Mice)
+                    mouse.Cursor.CursorMode = _cursorMode;
+            }
         }
     }
 
@@ -95,6 +92,7 @@ public sealed class Window
         // Create the window and add event handlers.
         _window = Silk.NET.Windowing.Window.Create(WindowOptions.DefaultVulkan with
         {
+            Title = "EuclidiumCS - Vulkan Transition",
             //WindowState = WindowState.Fullscreen,
             //WindowState = WindowState.Maximized,
             //WindowBorder = WindowBorder.Hidden,
@@ -117,8 +115,11 @@ public sealed class Window
 
     private void OnLoad()
     {
+        // Center the window first.
+        // TODO: This is a race condition.
         _window.Center();
 
+        // Create input and add event handlers.
         _inputContext = _window.CreateInput();
 
         foreach (var keyboard in _inputContext.Keyboards)
@@ -134,18 +135,11 @@ public sealed class Window
             mouse.MouseMove += OnMouseMove;
         }
 
-        //_inputContext.Keyboards[0].
+        // Create graphics context.
+        _graphicsContext = new(_window);
 
-        // TODO: Vulkan: https://github.com/dfkeenan/SilkVulkanTutorial/
-        //_vk = Vk.GetApi();
-        // NOTE: Currently, ImGuiController needs an OpenGL context.
-        // If it ever can use Vulkan instead, do that.
-        // While that isn't an option, use this:
-        // https://www.reddit.com/r/vulkan/comments/vnttmu/texture_issues_with_opengl_vulkan_interop_using/
-        // UPDATE: The ImGuiController can just be rewritten
-        // using imgui's vulkan backend as an example.
-
-        _vk = Vk.GetApi();
+        // Create ImGui context.
+        // TODO: Rewrite ImGuiController (name it ImGuiContext) using imgui's vulkan backend as an example.
         //_imguiController = new ImGuiController(_gl, _window, _inputContext, () =>
         //{
         //    var io = ImGui.GetIO();
@@ -193,6 +187,9 @@ public sealed class Window
 
     private void OnClosing()
     {
+        RenderShutdown?.Invoke();
+
+        //ImGui.SaveIniSettingsToDisk("./imgui.ini");
         // TODO: The ImGuiController does not do anything about cursors.
         //unsafe
         //{
@@ -200,8 +197,10 @@ public sealed class Window
         //    foreach (var (_, cursor) in _cursors!)
         //        glfw.DestroyCursor((Cursor*)cursor);
         //}
+        //_imguiController!.Dispose();
 
-        //ImGui.SaveIniSettingsToDisk("./imgui.ini");
+        _graphicsContext!.Dispose();
+        _inputContext!.Dispose();
     }
 
     private void OnUpdate(double deltaTime)
@@ -226,16 +225,6 @@ public sealed class Window
         //}
 
         //_imguiController!.Render();
-
-        // This is really dumb; apparently, Silk.NET.Windowing.Window
-        // calls its Render event one time AFTER it's flagged to close.
-        if (_window.IsClosing)
-        {
-            RenderShutdown?.Invoke();
-            //_imguiController!.Dispose();
-            _vk!.Dispose();
-            _inputContext!.Dispose();
-        }
     }
 
     private void OnResize(Vector2D<int> size) =>

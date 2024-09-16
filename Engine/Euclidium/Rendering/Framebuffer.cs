@@ -69,7 +69,7 @@ public class Framebuffer
         if (info.ColorAttachments.Count == 0 && info.DepthAttachment.Format == FramebufferFormat.None)
             return false;
 
-        var vk = Engine.Instance.Window.VK;
+        //var vk = Engine.Instance.Window.VK;
 
         // Create the framebuffer itself.
         //uint framebufferID = vk.CreateFramebuffer();
@@ -151,7 +151,7 @@ public class Framebuffer
 
     public void Destroy()
     {
-        var vk = Engine.Instance.Window.VK;
+        //var vk = Engine.Instance.Window.VK;
 
         //vk.DeleteTexture(_depthAttachmentID);
         //vk.DeleteTextures(CollectionsMarshal.AsSpan(_colorAttachmentIDs));
@@ -160,7 +160,7 @@ public class Framebuffer
 
     public void Bind()
     {
-        var vk = Engine.Instance.Window.VK;
+        //var vk = Engine.Instance.Window.VK;
 
         //vk.BindFramebuffer(FramebufferTarget.Framebuffer, _framebufferID);
         //vk.Viewport(0, 0, _info.Width, _info.Height);
@@ -168,7 +168,7 @@ public class Framebuffer
 
     public void Unbind()
     {
-        var vk = Engine.Instance.Window.VK;
+        //var vk = Engine.Instance.Window.VK;
 
         //vk.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
     }

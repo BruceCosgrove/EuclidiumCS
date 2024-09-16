@@ -109,7 +109,7 @@ public class VertexBuffer
 
     public VertexBuffer(VertexBufferInfo info)
     {
-        var vk = Engine.Instance.Window.VK;
+        //var vk = Engine.Instance.Window.VK;
 
         _count = info.Count;
         _layout = info.Layout;
@@ -147,7 +147,7 @@ public class VertexBuffer
     }
     public void Destroy()
     {
-        var vk = Engine.Instance.Window.VK;
+        //var vk = Engine.Instance.Window.VK;
 
         //vk.DeleteBuffer(_id);
         //vk.DeleteVertexArray(_idVAO);
@@ -155,7 +155,7 @@ public class VertexBuffer
 
     public void Bind()
     {
-        var vk = Engine.Instance.Window.VK;
+        //var vk = Engine.Instance.Window.VK;
 
         //vk.BindVertexArray(_idVAO);
         //vk.BindBuffer(BufferTargetARB.ArrayBuffer, _id);
@@ -168,7 +168,7 @@ public class VertexBuffer
         Debug.Assert(offset + count <= _count);
         Debug.Assert(0 < count && count <= data.Count);
 
-        var vk = Engine.Instance.Window.VK;
+        //var vk = Engine.Instance.Window.VK;
 
         ReadOnlySpan<float> span = CollectionsMarshal.AsSpan(data);
         //vk.NamedBufferSubData(_id, (nint)offset, (nuint)(count * sizeof(float)), span);

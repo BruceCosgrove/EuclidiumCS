@@ -13,7 +13,7 @@ namespace Client;
 internal sealed partial class Client
 {
     private static Window Window => Engine.Instance.Window;
-    private static Vk VK => Engine.Instance.Window.VK;
+    //private static Vk VK => Engine.Instance.Window.VK;
     private static IKeyboard Keyboard => Engine.Instance.Window.Keyboard;
     private static IMouse Mouse => Engine.Instance.Window.Mouse;
 
