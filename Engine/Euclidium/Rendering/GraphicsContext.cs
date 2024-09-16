@@ -8,19 +8,21 @@ using Silk.NET.Vulkan.Extensions.EXT;
 
 namespace Euclidium.Rendering;
 
-file struct QueueFamilyIndices
-{
-    public uint? GraphicsFamily;
-
-    public readonly bool IsComplete => GraphicsFamily.HasValue;
-}
-
 public sealed class GraphicsContext : IDisposable
 {
+    private struct QueueFamilyIndices
+    {
+        public uint? GraphicsFamily;
+
+        public readonly bool IsComplete => GraphicsFamily.HasValue;
+    }
+
     private Vk? _vk;
     private IVkSurface? _surface; // Not owned, just a reference.
     private Instance _instance;
     private PhysicalDevice _physicalDevice;
+    private Device _device;
+    private Queue _graphicsQueue;
 
 #if DEBUG
     private ExtDebugUtils? _debugUtils;
@@ -54,12 +56,17 @@ public sealed class GraphicsContext : IDisposable
         }
 #endif
 
+        // Create the instance.
+
+        var applicationName = (byte*)Marshal.StringToHGlobalAnsi("EuclidiumCS");
+        var engineName = (byte*)Marshal.StringToHGlobalAnsi("Euclidium");
+
         ApplicationInfo applicationInfo = new()
         {
             SType = StructureType.ApplicationInfo,
-            PApplicationName = (byte*)Marshal.StringToHGlobalAnsi("EuclidiumCS"),
+            PApplicationName = applicationName,
             ApplicationVersion = new Version32(0, 0, 1),
-            PEngineName = (byte*)Marshal.StringToHGlobalAnsi("Euclidium"),
+            PEngineName = engineName,
             EngineVersion = new Version32(0, 0, 1),
             ApiVersion = Vk.Version13,
         };
@@ -84,15 +91,18 @@ public sealed class GraphicsContext : IDisposable
         };
 #endif
 
+        var extensionNames = (byte**)SilkMarshal.StringArrayToPtr(extensions);
+        var layerNames = (byte**)SilkMarshal.StringArrayToPtr(s_validationLayers);
+
         InstanceCreateInfo instanceCreateInfo = new()
         {
             SType = StructureType.InstanceCreateInfo,
             PApplicationInfo = &applicationInfo,
             EnabledExtensionCount = (uint)extensions.Length,
-            PpEnabledExtensionNames = (byte**)SilkMarshal.StringArrayToPtr(extensions),
+            PpEnabledExtensionNames = extensionNames,
 #if DEBUG
             EnabledLayerCount = (uint)s_validationLayers.Length,
-            PpEnabledLayerNames = (byte**)SilkMarshal.StringArrayToPtr(s_validationLayers),
+            PpEnabledLayerNames = layerNames,
             PNext = &debugUtilsMessengerCreateInfoEXT,
 #else
             EnabledLayerCount = 0,
@@ -100,14 +110,6 @@ public sealed class GraphicsContext : IDisposable
         };
 
         var result = _vk.CreateInstance(&instanceCreateInfo, null, out _instance);
-
-        Marshal.FreeHGlobal((nint)applicationInfo.PApplicationName);
-        Marshal.FreeHGlobal((nint)applicationInfo.PEngineName);
-        SilkMarshal.Free((nint)instanceCreateInfo.PpEnabledExtensionNames);
-#if DEBUG
-        SilkMarshal.Free((nint)instanceCreateInfo.PpEnabledLayerNames);
-#endif
-
         if (result != Result.Success)
         {
             Console.Error.WriteLine("Failed to create instance.");
@@ -131,18 +133,72 @@ public sealed class GraphicsContext : IDisposable
 #endif
 
         // Pick the physical device.
-        var devices = _vk.GetPhysicalDevices(_instance).ToList();
-        _physicalDevice = devices.Find(IsPhysicalDeviceSuitable);
+
+        var physicalDevices = _vk.GetPhysicalDevices(_instance);
+        QueueFamilyIndices? queueFamilyIndices = null;
+        foreach (var physicalDevice in physicalDevices)
+        {
+            if (IsPhysicalDeviceSuitable(physicalDevice, out queueFamilyIndices))
+            {
+                _physicalDevice = physicalDevice;
+                break;
+            }
+        }
 
         if (_physicalDevice.Handle == 0)
         {
             Console.Error.WriteLine("No suitable physical device found.");
             Environment.Exit(1);
         }
+
+        // Create logical device and get the selected queues.
+
+        float priority = 1f;
+        DeviceQueueCreateInfo deviceQueueCreateInfo = new()
+        {
+            SType = StructureType.DeviceQueueCreateInfo,
+            QueueFamilyIndex = queueFamilyIndices!.Value.GraphicsFamily!.Value,
+            QueueCount = 1,
+            PQueuePriorities = &priority,
+        };
+
+        PhysicalDeviceFeatures physicalDeviceFeatures = new();
+
+        DeviceCreateInfo deviceCreateInfo = new()
+        {
+            SType = StructureType.DeviceCreateInfo,
+            QueueCreateInfoCount = 1,
+            PQueueCreateInfos = &deviceQueueCreateInfo,
+            EnabledExtensionCount = 0,
+            PEnabledFeatures = &physicalDeviceFeatures,
+#if DEBUG
+            EnabledLayerCount = (uint)s_validationLayers.Length,
+            PpEnabledLayerNames = layerNames,
+#endif
+        };
+
+        result = _vk.CreateDevice(_physicalDevice, &deviceCreateInfo, null, out _device);
+        if (result != Result.Success)
+        {
+            Console.Error.WriteLine("Failed to create device");
+            Environment.Exit(1);
+        }
+
+        _vk.GetDeviceQueue(_device, queueFamilyIndices!.Value.GraphicsFamily!.Value, 0, out _graphicsQueue);
+
+        // TODO: Make sure these are always deleted before returning.
+        // Right now, "Environment.Exit(1);" takes care of the memory leaks.
+        Marshal.FreeHGlobal((nint)applicationName);
+        Marshal.FreeHGlobal((nint)engineName);
+        SilkMarshal.Free((nint)extensionNames);
+#if DEBUG
+        SilkMarshal.Free((nint)layerNames);
+#endif
     }
 
     public unsafe void Dispose()
     {
+        _vk!.DestroyDevice(_device, null);
 #if DEBUG
         _debugUtils!.DestroyDebugUtilsMessenger(_instance, _debugMessenger, null);
 #endif
@@ -194,7 +250,7 @@ public sealed class GraphicsContext : IDisposable
     }
 #endif
 
-    private unsafe bool IsPhysicalDeviceSuitable(PhysicalDevice physicalDevice)
+    private unsafe bool IsPhysicalDeviceSuitable(PhysicalDevice physicalDevice, out QueueFamilyIndices? queueFamilyIndices)
     {
         QueueFamilyIndices indices = new();
 
@@ -203,13 +259,20 @@ public sealed class GraphicsContext : IDisposable
         var queueFamilies = new QueueFamilyProperties[queueFamilyCount];
         _vk!.GetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, queueFamilies);
 
-        for (uint i = 0; i < queueFamilyCount && !indices.IsComplete; ++i)
+        for (uint i = 0; i < queueFamilyCount; ++i)
         {
             var queueFamily = queueFamilies[i];
             if (queueFamily.QueueFlags.HasFlag(QueueFlags.GraphicsBit))
                 indices.GraphicsFamily = i;
+
+            if (indices.IsComplete)
+            {
+                queueFamilyIndices = indices;
+                return true;
+            }
         }
 
-        return indices.IsComplete;
+        queueFamilyIndices = null;
+        return false;
     }
 }
