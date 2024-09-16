@@ -122,7 +122,9 @@ public sealed class GraphicsContext : IDisposable
 
     public unsafe void Dispose()
     {
+#if DEBUG
         _debugUtils!.DestroyDebugUtilsMessenger(_instance, _debugMessenger, null);
+#endif
         _vk!.DestroyInstance(_instance, null);
         _vk!.Dispose();
     }
