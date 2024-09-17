@@ -55,6 +55,7 @@ public sealed class GraphicsContext : IDisposable
     private Image[]? _images;
     private Format _surfaceFormat;
     private Extent2D _extent;
+    private ImageView[]? _imageViews;
 
     public Vk VK => _vk!;
     public Instance Instance => _instance!;
@@ -116,6 +117,9 @@ public sealed class GraphicsContext : IDisposable
 
             // Create swap chain.
             CreateSwapChain(ref queueFamilySupport, ref swapChainSupport);
+
+            // Create image views.
+            CreateImageViews();
         }
         catch (Exception e)
         {
@@ -139,24 +143,32 @@ public sealed class GraphicsContext : IDisposable
     // This even works if it was only partially created or already partially or entirely disposed.
     public unsafe void Dispose()
     {
-        Dispose(ref _swapchain, () => _khrSwapchain!.DestroySwapchain(_device, _swapchain, null));
+        Dispose(ref _imageViews, handle => _vk!.DestroyImageView(_device, handle, null));
+        Dispose(ref _swapchain, handle => _khrSwapchain!.DestroySwapchain(_device, handle, null));
         Dispose(ref _khrSwapchain);
-        Dispose(ref _device, () => _vk!.DestroyDevice(_device, null));
-        Dispose(ref _surface, () => _khrSurface!.DestroySurface(_instance, _surface, null));
+        Dispose(ref _device, handle => _vk!.DestroyDevice(handle, null));
+        Dispose(ref _surface, handle => _khrSurface!.DestroySurface(_instance, handle, null));
         Dispose(ref _khrSurface);
 #if DEBUG
-        Dispose(ref _debugMessenger, () => _debugUtils!.DestroyDebugUtilsMessenger(_instance, _debugMessenger, null));
+        Dispose(ref _debugMessenger, handle => _debugUtils!.DestroyDebugUtilsMessenger(_instance, handle, null));
         Dispose(ref _debugUtils);
 #endif
-        Dispose(ref _instance, () => _vk!.DestroyInstance(_instance, null));
+        Dispose(ref _instance, handle => _vk!.DestroyInstance(handle, null));
         Dispose(ref _vk);
     }
 
-    private static void Dispose<T>(ref T handle, Action destroyFunc) where T : struct
+    private static void Dispose<T>(ref T[]? handles, Action<T> destroyFunc) where T : struct
+    {
+        if (handles != null)
+            for (uint i = 0; i < handles.Length; ++i)
+                Dispose(ref handles[i], destroyFunc);
+    }
+
+    private static void Dispose<T>(ref T handle, Action<T> destroyFunc) where T : struct
     {
         if (!handle.Equals(default(T)))
         {
-            destroyFunc();
+            destroyFunc(handle);
             handle = default;
         }
     }
@@ -523,5 +535,39 @@ public sealed class GraphicsContext : IDisposable
         if (surfaceCapabilities.MaxImageCount > 0 && imageCount > surfaceCapabilities.MaxImageCount)
             imageCount = surfaceCapabilities.MaxImageCount;
         return imageCount;
+    }
+
+    private unsafe void CreateImageViews()
+    {
+        _imageViews = new ImageView[_images!.Length];
+
+        ImageViewCreateInfo imageViewCreateInfo = new()
+        {
+            SType = StructureType.ImageViewCreateInfo,
+            ViewType = ImageViewType.Type2D,
+            Format = _surfaceFormat,
+            Components =
+            {
+                R = ComponentSwizzle.Identity,
+                G = ComponentSwizzle.Identity,
+                B = ComponentSwizzle.Identity,
+                A = ComponentSwizzle.Identity,
+            },
+            SubresourceRange =
+            {
+                AspectMask = ImageAspectFlags.ColorBit,
+                BaseMipLevel = 0,
+                LevelCount = 1,
+                BaseArrayLayer = 0,
+                LayerCount = 1,
+            },
+        };
+
+        for (uint i = 0; i < _images.Length; ++i)
+        {
+            imageViewCreateInfo.Image = _images[i];
+            if (_vk!.CreateImageView(_device, &imageViewCreateInfo, null, out _imageViews[i]) != Result.Success)
+                throw new Exception("Failed to create image view.");
+        }
     }
 }
