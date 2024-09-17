@@ -10,32 +10,49 @@ namespace Euclidium.Rendering;
 
 public sealed class GraphicsContext : IDisposable
 {
-    private struct QueueFamilyIndices
+    private struct QueueFamilySupport
     {
         public uint? GraphicsFamily;
-        public uint? PresentationFamily;
+        public uint? PresentFamily;
 
-        public readonly bool IsComplete => GraphicsFamily.HasValue && PresentationFamily.HasValue;
+        public readonly bool IsComplete => GraphicsFamily.HasValue && PresentFamily.HasValue;
+    }
+
+    private struct SwapChainSupport
+    {
+        public SurfaceCapabilitiesKHR Capabilities;
+        public SurfaceFormatKHR[] Formats;
+        public PresentModeKHR[] PresentModes;
     }
 
     private Vk _vk;
     private Instance _instance;
-    private KhrSurface _khrSurface; // why
-    private SurfaceKHR _surfaceKHR; // tho
+    private KhrSurface _khrSurface;
+    private SurfaceKHR _surface;
     private PhysicalDevice _physicalDevice;
     private Device _device;
     private Queue _graphicsQueue;
     private Queue _presentationQueue;
+    private KhrSwapchain _khrSwapchain;
+    private SwapchainKHR _swapchain;
+    private Image[] _images;
+    private Format _surfaceFormat;
+    private Extent2D _extent;
 
 #if DEBUG
     private ExtDebugUtils? _debugUtils;
     private DebugUtilsMessengerEXT _debugMessenger;
 
-    private static readonly string[] s_validationLayers =
+    private static readonly string[] s_requiredValidationLayers =
     [
         "VK_LAYER_KHRONOS_validation",
     ];
 #endif
+
+    private static readonly string[] s_requiredDeviceExtensions =
+    [
+        KhrSwapchain.ExtensionName,
+    ];
 
     public Vk VK => _vk;
     public Instance Instance => _instance!;
@@ -74,9 +91,9 @@ public sealed class GraphicsContext : IDisposable
         };
 
         var surfaceExtensions = window.VkSurface!.GetRequiredExtensions(out uint surfaceExtensionCount);
-        var extensions = SilkMarshal.PtrToStringArray((nint)surfaceExtensions, (int)surfaceExtensionCount);
+        var instanceExtensions = SilkMarshal.PtrToStringArray((nint)surfaceExtensions, (int)surfaceExtensionCount);
 #if DEBUG
-        extensions = [..extensions, ExtDebugUtils.ExtensionName];
+        instanceExtensions = [..instanceExtensions, ExtDebugUtils.ExtensionName];
 #endif
 
 #if DEBUG
@@ -97,19 +114,19 @@ public sealed class GraphicsContext : IDisposable
         };
 #endif
 
-        var extensionNames = (byte**)SilkMarshal.StringArrayToPtr(extensions);
+        var instanceExtensionNames = (byte**)SilkMarshal.StringArrayToPtr(instanceExtensions);
 #if DEBUG
-        var layerNames = (byte**)SilkMarshal.StringArrayToPtr(s_validationLayers);
+        var layerNames = (byte**)SilkMarshal.StringArrayToPtr(s_requiredValidationLayers);
 #endif
 
         InstanceCreateInfo instanceCreateInfo = new()
         {
             SType = StructureType.InstanceCreateInfo,
             PApplicationInfo = &applicationInfo,
-            EnabledExtensionCount = (uint)extensions.Length,
-            PpEnabledExtensionNames = extensionNames,
+            EnabledExtensionCount = (uint)instanceExtensions.Length,
+            PpEnabledExtensionNames = instanceExtensionNames,
 #if DEBUG
-            EnabledLayerCount = (uint)s_validationLayers.Length,
+            EnabledLayerCount = (uint)s_requiredValidationLayers.Length,
             PpEnabledLayerNames = layerNames,
             PNext = &debugUtilsMessengerCreateInfoEXT,
 #else
@@ -128,34 +145,38 @@ public sealed class GraphicsContext : IDisposable
         // TODO: IDK why, but the above "PNext = &debugUtilsMessengerCreateInfoEXT,"
         // is sufficient and required to create the messenger, so this seems useless.
 #if DEBUG
-        if (_vk.TryGetInstanceExtension(_instance, out _debugUtils))
+        if (!_vk.TryGetInstanceExtension(_instance, out _debugUtils))
         {
-            result = _debugUtils!.CreateDebugUtilsMessenger(_instance, &debugUtilsMessengerCreateInfoEXT, null, out _debugMessenger);
+            Console.Error.WriteLine("Failed to get the debug util extension.");
+            Environment.Exit(1);
+        }
 
-            if (result != Result.Success)
-            {
-                Console.Error.WriteLine("Failed to create debug messenger.");
-                Environment.Exit(1);
-            }
+        result = _debugUtils!.CreateDebugUtilsMessenger(_instance, &debugUtilsMessengerCreateInfoEXT, null, out _debugMessenger);
+        if (result != Result.Success)
+        {
+            Console.Error.WriteLine("Failed to create debug messenger.");
+            Environment.Exit(1);
         }
 #endif
 
         // Create the surface.
+
         if (!_vk.TryGetInstanceExtension(_instance, out _khrSurface))
         {
-            Console.Error.WriteLine("Failed to create surface.");
+            Console.Error.WriteLine("Failed to get the surface extension.");
             Environment.Exit(1);
         }
 
-        _surfaceKHR = window.VkSurface.Create<AllocationCallbacks>(_instance.ToHandle(), null).ToSurface();
+        _surface = window.VkSurface.Create<AllocationCallbacks>(_instance.ToHandle(), null).ToSurface();
 
         // Pick the physical device.
 
         var physicalDevices = _vk.GetPhysicalDevices(_instance);
-        QueueFamilyIndices? queueFamilyIndices = null;
+        QueueFamilySupport queueFamilySupport = new();
+        SwapChainSupport swapChainSupport = new();
         foreach (var physicalDevice in physicalDevices)
         {
-            if (IsPhysicalDeviceSuitable(physicalDevice, out queueFamilyIndices))
+            if (IsPhysicalDeviceSuitable(physicalDevice, ref queueFamilySupport, ref swapChainSupport))
             {
                 _physicalDevice = physicalDevice;
                 break;
@@ -170,8 +191,8 @@ public sealed class GraphicsContext : IDisposable
 
         // Create logical device and get the selected queues.
         
-        uint graphicsFamily = queueFamilyIndices!.Value.GraphicsFamily!.Value;
-        uint presentationFamily = queueFamilyIndices!.Value.PresentationFamily!.Value;
+        uint graphicsFamily = queueFamilySupport.GraphicsFamily!.Value;
+        uint presentationFamily = queueFamilySupport.PresentFamily!.Value;
 
         var uniqueQueueFamilies = new[] { graphicsFamily, presentationFamily }.Distinct().ToArray();
 
@@ -190,6 +211,8 @@ public sealed class GraphicsContext : IDisposable
 
         PhysicalDeviceFeatures physicalDeviceFeatures = new();
 
+        var deviceExtensionNames = (byte**)SilkMarshal.StringArrayToPtr(s_requiredDeviceExtensions);
+
         fixed (DeviceQueueCreateInfo* deviceQueueCreateInfosPtr = deviceQueueCreateInfos)
         {
             DeviceCreateInfo deviceCreateInfo = new()
@@ -197,10 +220,11 @@ public sealed class GraphicsContext : IDisposable
                 SType = StructureType.DeviceCreateInfo,
                 QueueCreateInfoCount = (uint)deviceQueueCreateInfos.Length,
                 PQueueCreateInfos = deviceQueueCreateInfosPtr,
-                EnabledExtensionCount = 0,
+                EnabledExtensionCount = (uint)s_requiredDeviceExtensions.Length,
+                PpEnabledExtensionNames = deviceExtensionNames,
                 PEnabledFeatures = &physicalDeviceFeatures,
 #if DEBUG
-                EnabledLayerCount = (uint)s_validationLayers.Length,
+                EnabledLayerCount = (uint)s_requiredValidationLayers.Length,
                 PpEnabledLayerNames = layerNames,
 #endif
             };
@@ -217,11 +241,16 @@ public sealed class GraphicsContext : IDisposable
         _vk.GetDeviceQueue(_device, graphicsFamily, 0, out _graphicsQueue);
         _vk.GetDeviceQueue(_device, presentationFamily, 0, out _presentationQueue);
 
+        // Create swap chain.
+
+        CreateSwapChain(ref queueFamilySupport, ref swapChainSupport);
+
         // TODO: Make sure these are always deleted before returning.
         // Right now, "Environment.Exit(1);" takes care of the memory leaks.
         Marshal.FreeHGlobal((nint)applicationName);
         Marshal.FreeHGlobal((nint)engineName);
-        SilkMarshal.Free((nint)extensionNames);
+        SilkMarshal.Free((nint)instanceExtensionNames);
+        SilkMarshal.Free((nint)deviceExtensionNames);
 #if DEBUG
         SilkMarshal.Free((nint)layerNames);
 #endif
@@ -229,10 +258,14 @@ public sealed class GraphicsContext : IDisposable
 
     public unsafe void Dispose()
     {
+        _khrSwapchain.DestroySwapchain(_device, _swapchain, null);
+        _khrSwapchain.Dispose();
         _vk.DestroyDevice(_device, null);
 #if DEBUG
         _debugUtils!.DestroyDebugUtilsMessenger(_instance, _debugMessenger, null);
 #endif
+        _khrSurface.DestroySurface(_instance, _surface, null);
+        _khrSurface.Dispose();
         _vk.DestroyInstance(_instance, null);
         _vk.Dispose();
     }
@@ -244,8 +277,8 @@ public sealed class GraphicsContext : IDisposable
         _vk.EnumerateInstanceLayerProperties(&layerCount, null);
         var layers = new LayerProperties[layerCount];
         _vk.EnumerateInstanceLayerProperties(&layerCount, layers);
-        var availableLayers = layers.Select(layer => Marshal.PtrToStringAnsi((nint)layer.LayerName)).ToHashSet();
-        return s_validationLayers.All(availableLayers.Contains);
+        var availableLayers = layers.Select(layer => Marshal.PtrToStringAnsi((nint)layer.LayerName));
+        return s_requiredValidationLayers.All(availableLayers.Contains);
     }
 
     private unsafe uint DebugMessageCallback(DebugUtilsMessageSeverityFlagsEXT messageSeverity, DebugUtilsMessageTypeFlagsEXT messageTypes, DebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData)
@@ -271,34 +304,154 @@ public sealed class GraphicsContext : IDisposable
     }
 #endif
 
-    private unsafe bool IsPhysicalDeviceSuitable(PhysicalDevice physicalDevice, out QueueFamilyIndices? queueFamilyIndices)
+    private unsafe bool IsPhysicalDeviceSuitable(PhysicalDevice physicalDevice, ref QueueFamilySupport outQueueFamilySupport, ref SwapChainSupport outSwapChainSupport)
     {
-        QueueFamilyIndices indices = new();
+        // Check if the device has the required extensions.
+
+        uint extensionCount = 0;
+        _vk.EnumerateDeviceExtensionProperties(physicalDevice, (byte*)null, &extensionCount, null);
+        var extensions = new ExtensionProperties[extensionCount];
+        _vk.EnumerateDeviceExtensionProperties(physicalDevice, (byte*)null, &extensionCount, extensions);
+
+        var extensionNames = extensions.Select(extension => Marshal.PtrToStringAnsi((nint)extension.ExtensionName));
+        if (!s_requiredDeviceExtensions.All(extensionNames.Contains))
+            return false;
+
+        // Check if the swap chain is suitable.
+
+        SwapChainSupport swapChainSupport = new();
+
+        _khrSurface.GetPhysicalDeviceSurfaceCapabilities(physicalDevice, _surface, out swapChainSupport.Capabilities);
+
+        uint formatCount = 0;
+        _khrSurface.GetPhysicalDeviceSurfaceFormats(physicalDevice, _surface, &formatCount, null);
+        var formats = new SurfaceFormatKHR[formatCount];
+        _khrSurface.GetPhysicalDeviceSurfaceFormats(physicalDevice, _surface, &formatCount, formats);
+        swapChainSupport.Formats = formats;
+
+        uint presentModeCount = 0;
+        _khrSurface.GetPhysicalDeviceSurfacePresentModes(physicalDevice, _surface, &presentModeCount, null);
+        var presentModes = new PresentModeKHR[presentModeCount];
+        _khrSurface.GetPhysicalDeviceSurfacePresentModes(physicalDevice, _surface, &presentModeCount, presentModes);
+        swapChainSupport.PresentModes = presentModes;
+
+        if (swapChainSupport.Formats.Length == 0 || swapChainSupport.PresentModes.Length == 0)
+            return false;
+
+        // Check if the device has the required queue families.
+
+        QueueFamilySupport queueFamilySupport = new();
 
         uint queueFamilyCount = 0;
         _vk.GetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, null);
         var queueFamilies = new QueueFamilyProperties[queueFamilyCount];
         _vk.GetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, queueFamilies);
 
-        for (uint i = 0; i < queueFamilyCount; ++i)
+        for (uint i = 0; i < queueFamilyCount && !queueFamilySupport.IsComplete; ++i)
         {
             var queueFamily = queueFamilies[i];
 
             if (queueFamily.QueueFlags.HasFlag(QueueFlags.GraphicsBit))
-                indices.GraphicsFamily = i;
+                queueFamilySupport.GraphicsFamily = i;
 
-            _khrSurface.GetPhysicalDeviceSurfaceSupport(physicalDevice, i, _surfaceKHR, out var presentationSupport);
+            _khrSurface.GetPhysicalDeviceSurfaceSupport(physicalDevice, i, _surface, out var presentationSupport);
             if (presentationSupport)
-                indices.PresentationFamily = i;
-
-            if (indices.IsComplete)
-            {
-                queueFamilyIndices = indices;
-                return true;
-            }
+                queueFamilySupport.PresentFamily = i;
         }
 
-        queueFamilyIndices = null;
-        return false;
+        if (!queueFamilySupport.IsComplete)
+            return false;
+
+        // Return everything.
+
+        outQueueFamilySupport = queueFamilySupport;
+        outSwapChainSupport = swapChainSupport;
+        return true;
+    }
+
+    private unsafe void CreateSwapChain(ref QueueFamilySupport queueFamilySupport, ref SwapChainSupport swapChainSupport, SwapchainKHR oldSwapchain = new())
+    {
+        var extent = SelectExtent(ref swapChainSupport.Capabilities);
+        var surfaceFormat = SelectSurfaceFormat(swapChainSupport.Formats);
+        var presentMode = SelectPresentMode(swapChainSupport.PresentModes);
+        var imageCount = SelectImageCount(ref swapChainSupport.Capabilities);
+
+        SwapchainCreateInfoKHR swapchainCreateInfo = new()
+        {
+            SType = StructureType.SwapchainCreateInfoKhr,
+            Surface = _surface,
+            MinImageCount = imageCount,
+            ImageFormat = surfaceFormat.Format,
+            ImageColorSpace = surfaceFormat.ColorSpace,
+            ImageExtent = extent,
+            ImageArrayLayers = 1,
+            ImageUsage = ImageUsageFlags.ColorAttachmentBit,
+            ImageSharingMode = SharingMode.Exclusive,
+
+            PreTransform = swapChainSupport.Capabilities.CurrentTransform,
+            CompositeAlpha = CompositeAlphaFlagsKHR.OpaqueBitKhr,
+            PresentMode = presentMode,
+            Clipped = true,
+            OldSwapchain = oldSwapchain
+        };
+
+        uint graphicsFamily = queueFamilySupport.GraphicsFamily!.Value;
+        uint presentationFamily = queueFamilySupport.PresentFamily!.Value;
+        var queueFamilyIndices = stackalloc[] { graphicsFamily, presentationFamily };
+        if (graphicsFamily != presentationFamily)
+        {
+            swapchainCreateInfo.ImageSharingMode = SharingMode.Concurrent;
+            swapchainCreateInfo.QueueFamilyIndexCount = 2;
+            swapchainCreateInfo.PQueueFamilyIndices = queueFamilyIndices;
+        }
+
+        if (!_vk.TryGetDeviceExtension(_instance, _device, out _khrSwapchain))
+        {
+            Console.Error.WriteLine("Failed to get the swap chain extension.");
+            Environment.Exit(1);
+        }
+
+        var result = _khrSwapchain.CreateSwapchain(_device, &swapchainCreateInfo, null, out _swapchain);
+        if (result != Result.Success)
+        {
+            Console.Error.WriteLine("Failed to create swapchain.");
+            Environment.Exit(1);
+        }
+
+        _khrSwapchain.GetSwapchainImages(_device, _swapchain, &imageCount, null);
+        var images = new Image[imageCount];
+        _khrSwapchain.GetSwapchainImages(_device, _swapchain, &imageCount, images);
+        _images = images;
+
+        _surfaceFormat = surfaceFormat.Format;
+        _extent = extent;
+    }
+
+    private SurfaceFormatKHR SelectSurfaceFormat(IReadOnlyList<SurfaceFormatKHR> surfaceFormats)
+    {
+        foreach (var surfaceFormat in surfaceFormats)
+            if (surfaceFormat.Format == Format.B8G8R8A8Srgb && surfaceFormat.ColorSpace == ColorSpaceKHR.SpaceSrgbNonlinearKhr)
+                return surfaceFormat;
+        return surfaceFormats[0];
+    }
+
+    private PresentModeKHR SelectPresentMode(IReadOnlyList<PresentModeKHR> presentModes)
+    {
+        foreach (var presentMode in presentModes)
+            if (presentMode == PresentModeKHR.MailboxKhr)
+                return presentMode;
+        return PresentModeKHR.FifoKhr; // Guaranteed to be available.
+    }
+    private Extent2D SelectExtent(ref readonly SurfaceCapabilitiesKHR surfaceCapabilities)
+    {
+        return surfaceCapabilities.CurrentExtent;
+    }
+
+    private uint SelectImageCount(ref readonly SurfaceCapabilitiesKHR surfaceCapabilities)
+    {
+        uint imageCount = surfaceCapabilities.MinImageCount + 1;
+        if (surfaceCapabilities.MaxImageCount > 0 && imageCount > surfaceCapabilities.MaxImageCount)
+            imageCount = surfaceCapabilities.MaxImageCount;
+        return imageCount;
     }
 }
