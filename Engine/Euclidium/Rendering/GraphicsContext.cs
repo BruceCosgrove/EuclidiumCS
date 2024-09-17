@@ -182,103 +182,6 @@ public sealed class GraphicsContext : IDisposable
         }
     }
 
-#if DEBUG
-    private unsafe uint DebugMessageCallback(
-        DebugUtilsMessageSeverityFlagsEXT messageSeverity,
-        DebugUtilsMessageTypeFlagsEXT messageTypes,
-        DebugUtilsMessengerCallbackDataEXT* pCallbackData,
-        void* pUserData
-    ) {
-        string severityName = messageSeverity switch
-        {
-            DebugUtilsMessageSeverityFlagsEXT.VerboseBitExt => "Verbose",
-            DebugUtilsMessageSeverityFlagsEXT.InfoBitExt    => "Info",
-            DebugUtilsMessageSeverityFlagsEXT.WarningBitExt => "Warning",
-            DebugUtilsMessageSeverityFlagsEXT.ErrorBitExt   => "Error",
-            _                                               => "Unknown",
-        };
-        string typeName = messageTypes switch
-        {
-            DebugUtilsMessageTypeFlagsEXT.GeneralBitExt              => "General",
-            DebugUtilsMessageTypeFlagsEXT.ValidationBitExt           => "Validation",
-            DebugUtilsMessageTypeFlagsEXT.PerformanceBitExt          => "Performance",
-            DebugUtilsMessageTypeFlagsEXT.DeviceAddressBindingBitExt => "DeviceAddressBinding",
-            _                                                        => "Unknown",
-        };
-        Console.WriteLine($"[{severityName}|{typeName}]: {Marshal.PtrToStringAnsi((nint)pCallbackData->PMessage)}");
-        return Vk.False;
-    }
-#endif
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private unsafe bool IsPhysicalDeviceSuitable(
-        PhysicalDevice physicalDevice,
-        ref QueueFamilySupport outQueueFamilySupport,
-        ref SwapChainSupport outSwapChainSupport
-    ) {
-        // Check if the device has the required extensions.
-
-        uint extensionCount = 0;
-        _vk!.EnumerateDeviceExtensionProperties(physicalDevice, (byte*)null, &extensionCount, null);
-        var extensions = new ExtensionProperties[extensionCount];
-        _vk!.EnumerateDeviceExtensionProperties(physicalDevice, (byte*)null, &extensionCount, extensions);
-
-        var extensionNames = extensions.Select(extension => Marshal.PtrToStringAnsi((nint)extension.ExtensionName));
-        if (!s_requiredDeviceExtensions.All(extensionNames.Contains))
-            return false;
-
-        // Check if the swap chain is suitable.
-
-        SwapChainSupport swapChainSupport = new();
-
-        _khrSurface!.GetPhysicalDeviceSurfaceCapabilities(physicalDevice, _surface, out swapChainSupport.Capabilities);
-
-        uint formatCount = 0;
-        _khrSurface!.GetPhysicalDeviceSurfaceFormats(physicalDevice, _surface, &formatCount, null);
-        var formats = new SurfaceFormatKHR[formatCount];
-        _khrSurface!.GetPhysicalDeviceSurfaceFormats(physicalDevice, _surface, &formatCount, formats);
-        swapChainSupport.Formats = formats;
-
-        uint presentModeCount = 0;
-        _khrSurface!.GetPhysicalDeviceSurfacePresentModes(physicalDevice, _surface, &presentModeCount, null);
-        var presentModes = new PresentModeKHR[presentModeCount];
-        _khrSurface!.GetPhysicalDeviceSurfacePresentModes(physicalDevice, _surface, &presentModeCount, presentModes);
-        swapChainSupport.PresentModes = presentModes;
-
-        if (swapChainSupport.Formats.Length == 0 || swapChainSupport.PresentModes.Length == 0)
-            return false;
-
-        // Check if the device has the required queue families.
-
-        QueueFamilySupport queueFamilySupport = new();
-
-        uint queueFamilyCount = 0;
-        _vk!.GetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, null);
-        var queueFamilies = new QueueFamilyProperties[queueFamilyCount];
-        _vk!.GetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, queueFamilies);
-
-        for (uint i = 0; i < queueFamilyCount && !queueFamilySupport.IsComplete; ++i)
-        {
-            var queueFamily = queueFamilies[i];
-
-            if (queueFamily.QueueFlags.HasFlag(QueueFlags.GraphicsBit))
-                queueFamilySupport.GraphicsFamily = i;
-
-            _khrSurface!.GetPhysicalDeviceSurfaceSupport(physicalDevice, i, _surface, out var presentationSupport);
-            if (presentationSupport)
-                queueFamilySupport.PresentFamily = i;
-        }
-
-        if (!queueFamilySupport.IsComplete)
-            return false;
-
-        // Return everything.
-
-        outQueueFamilySupport = queueFamilySupport;
-        outSwapChainSupport = swapChainSupport;
-        return true;
-    }
-
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private void CreateAPI(IWindow window)
     {
@@ -368,6 +271,34 @@ public sealed class GraphicsContext : IDisposable
 #endif
     }
 
+#if DEBUG
+    private unsafe uint DebugMessageCallback(
+        DebugUtilsMessageSeverityFlagsEXT messageSeverity,
+        DebugUtilsMessageTypeFlagsEXT messageTypes,
+        DebugUtilsMessengerCallbackDataEXT* pCallbackData,
+        void* pUserData
+    ) {
+        string severityName = messageSeverity switch
+        {
+            DebugUtilsMessageSeverityFlagsEXT.VerboseBitExt => "Verbose",
+            DebugUtilsMessageSeverityFlagsEXT.InfoBitExt    => "Info",
+            DebugUtilsMessageSeverityFlagsEXT.WarningBitExt => "Warning",
+            DebugUtilsMessageSeverityFlagsEXT.ErrorBitExt   => "Error",
+            _                                               => "Unknown",
+        };
+        string typeName = messageTypes switch
+        {
+            DebugUtilsMessageTypeFlagsEXT.GeneralBitExt              => "General",
+            DebugUtilsMessageTypeFlagsEXT.ValidationBitExt           => "Validation",
+            DebugUtilsMessageTypeFlagsEXT.PerformanceBitExt          => "Performance",
+            DebugUtilsMessageTypeFlagsEXT.DeviceAddressBindingBitExt => "DeviceAddressBinding",
+            _                                                        => "Unknown",
+        };
+        Console.WriteLine($"[{severityName}|{typeName}]: {Marshal.PtrToStringAnsi((nint)pCallbackData->PMessage)}");
+        return Vk.False;
+    }
+#endif
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private unsafe void CreateSurface(IWindow window)
     {
@@ -395,6 +326,75 @@ public sealed class GraphicsContext : IDisposable
 
         if (_physicalDevice.Handle == 0)
             throw new Exception("No suitable physical device found.");
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private unsafe bool IsPhysicalDeviceSuitable(
+        PhysicalDevice physicalDevice,
+        ref QueueFamilySupport outQueueFamilySupport,
+        ref SwapChainSupport outSwapChainSupport
+    ) {
+        // Check if the device has the required extensions.
+
+        uint extensionCount = 0;
+        _vk!.EnumerateDeviceExtensionProperties(physicalDevice, (byte*)null, &extensionCount, null);
+        var extensions = new ExtensionProperties[extensionCount];
+        _vk!.EnumerateDeviceExtensionProperties(physicalDevice, (byte*)null, &extensionCount, extensions);
+
+        var extensionNames = extensions.Select(extension => Marshal.PtrToStringAnsi((nint)extension.ExtensionName));
+        if (!s_requiredDeviceExtensions.All(extensionNames.Contains))
+            return false;
+
+        // Check if the swap chain is suitable.
+
+        SwapChainSupport swapChainSupport = new();
+
+        _khrSurface!.GetPhysicalDeviceSurfaceCapabilities(physicalDevice, _surface, out swapChainSupport.Capabilities);
+
+        uint formatCount = 0;
+        _khrSurface!.GetPhysicalDeviceSurfaceFormats(physicalDevice, _surface, &formatCount, null);
+        var formats = new SurfaceFormatKHR[formatCount];
+        _khrSurface!.GetPhysicalDeviceSurfaceFormats(physicalDevice, _surface, &formatCount, formats);
+        swapChainSupport.Formats = formats;
+
+        uint presentModeCount = 0;
+        _khrSurface!.GetPhysicalDeviceSurfacePresentModes(physicalDevice, _surface, &presentModeCount, null);
+        var presentModes = new PresentModeKHR[presentModeCount];
+        _khrSurface!.GetPhysicalDeviceSurfacePresentModes(physicalDevice, _surface, &presentModeCount, presentModes);
+        swapChainSupport.PresentModes = presentModes;
+
+        if (swapChainSupport.Formats.Length == 0 || swapChainSupport.PresentModes.Length == 0)
+            return false;
+
+        // Check if the device has the required queue families.
+
+        QueueFamilySupport queueFamilySupport = new();
+
+        uint queueFamilyCount = 0;
+        _vk!.GetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, null);
+        var queueFamilies = new QueueFamilyProperties[queueFamilyCount];
+        _vk!.GetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, queueFamilies);
+
+        for (uint i = 0; i < queueFamilyCount && !queueFamilySupport.IsComplete; ++i)
+        {
+            var queueFamily = queueFamilies[i];
+
+            if (queueFamily.QueueFlags.HasFlag(QueueFlags.GraphicsBit))
+                queueFamilySupport.GraphicsFamily = i;
+
+            _khrSurface!.GetPhysicalDeviceSurfaceSupport(physicalDevice, i, _surface, out var presentationSupport);
+            if (presentationSupport)
+                queueFamilySupport.PresentFamily = i;
+        }
+
+        if (!queueFamilySupport.IsComplete)
+            return false;
+
+        // Return everything.
+
+        outQueueFamilySupport = queueFamilySupport;
+        outSwapChainSupport = swapChainSupport;
+        return true;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -537,6 +537,7 @@ public sealed class GraphicsContext : IDisposable
         return imageCount;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private unsafe void CreateImageViews()
     {
         _imageViews = new ImageView[_images!.Length];
