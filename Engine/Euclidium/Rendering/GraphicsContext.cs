@@ -3,8 +3,8 @@ using Silk.NET.Core;
 using Silk.NET.Vulkan;
 using Silk.NET.Windowing;
 using System.Runtime.InteropServices;
-using Silk.NET.Core.Contexts;
 using Silk.NET.Vulkan.Extensions.EXT;
+using Silk.NET.Vulkan.Extensions.KHR;
 
 namespace Euclidium.Rendering;
 
@@ -13,16 +13,19 @@ public sealed class GraphicsContext : IDisposable
     private struct QueueFamilyIndices
     {
         public uint? GraphicsFamily;
+        public uint? PresentationFamily;
 
-        public readonly bool IsComplete => GraphicsFamily.HasValue;
+        public readonly bool IsComplete => GraphicsFamily.HasValue && PresentationFamily.HasValue;
     }
 
-    private Vk? _vk;
-    private IVkSurface? _surface; // Not owned, just a reference.
+    private Vk _vk;
     private Instance _instance;
+    private KhrSurface _khrSurface; // why
+    private SurfaceKHR _surfaceKHR; // tho
     private PhysicalDevice _physicalDevice;
     private Device _device;
     private Queue _graphicsQueue;
+    private Queue _presentationQueue;
 
 #if DEBUG
     private ExtDebugUtils? _debugUtils;
@@ -34,15 +37,14 @@ public sealed class GraphicsContext : IDisposable
     ];
 #endif
 
-    public Vk VK => _vk!;
+    public Vk VK => _vk;
     public Instance Instance => _instance!;
 
     public unsafe GraphicsContext(IWindow window)
     {
         _vk = Vk.GetApi();
-        _surface = window.VkSurface;
 
-        if (_surface == null)
+        if (window.VkSurface == null)
         {
             Console.Error.WriteLine("Failed to initialize Vulkan window.");
             Environment.Exit(1);
@@ -71,7 +73,11 @@ public sealed class GraphicsContext : IDisposable
             ApiVersion = Vk.Version13,
         };
 
-        var extensions = GetRequiredExtensions();
+        var surfaceExtensions = window.VkSurface!.GetRequiredExtensions(out uint surfaceExtensionCount);
+        var extensions = SilkMarshal.PtrToStringArray((nint)surfaceExtensions, (int)surfaceExtensionCount);
+#if DEBUG
+        extensions = [..extensions, ExtDebugUtils.ExtensionName];
+#endif
 
 #if DEBUG
         DebugUtilsMessengerCreateInfoEXT debugUtilsMessengerCreateInfoEXT = new()
@@ -92,7 +98,9 @@ public sealed class GraphicsContext : IDisposable
 #endif
 
         var extensionNames = (byte**)SilkMarshal.StringArrayToPtr(extensions);
+#if DEBUG
         var layerNames = (byte**)SilkMarshal.StringArrayToPtr(s_validationLayers);
+#endif
 
         InstanceCreateInfo instanceCreateInfo = new()
         {
@@ -132,6 +140,15 @@ public sealed class GraphicsContext : IDisposable
         }
 #endif
 
+        // Create the surface.
+        if (!_vk.TryGetInstanceExtension(_instance, out _khrSurface))
+        {
+            Console.Error.WriteLine("Failed to create surface.");
+            Environment.Exit(1);
+        }
+
+        _surfaceKHR = window.VkSurface.Create<AllocationCallbacks>(_instance.ToHandle(), null).ToSurface();
+
         // Pick the physical device.
 
         var physicalDevices = _vk.GetPhysicalDevices(_instance);
@@ -152,39 +169,53 @@ public sealed class GraphicsContext : IDisposable
         }
 
         // Create logical device and get the selected queues.
+        
+        uint graphicsFamily = queueFamilyIndices!.Value.GraphicsFamily!.Value;
+        uint presentationFamily = queueFamilyIndices!.Value.PresentationFamily!.Value;
+
+        var uniqueQueueFamilies = new[] { graphicsFamily, presentationFamily }.Distinct().ToArray();
 
         float priority = 1f;
-        DeviceQueueCreateInfo deviceQueueCreateInfo = new()
+        var deviceQueueCreateInfos = new DeviceQueueCreateInfo[uniqueQueueFamilies.Length];
+        for (uint i = 0; i < uniqueQueueFamilies.Length; ++i)
         {
-            SType = StructureType.DeviceQueueCreateInfo,
-            QueueFamilyIndex = queueFamilyIndices!.Value.GraphicsFamily!.Value,
-            QueueCount = 1,
-            PQueuePriorities = &priority,
-        };
+            deviceQueueCreateInfos[i] = new()
+            {
+                SType = StructureType.DeviceQueueCreateInfo,
+                QueueFamilyIndex = uniqueQueueFamilies[i],
+                QueueCount = 1,
+                PQueuePriorities = &priority,
+            };
+        }
 
         PhysicalDeviceFeatures physicalDeviceFeatures = new();
 
-        DeviceCreateInfo deviceCreateInfo = new()
+        fixed (DeviceQueueCreateInfo* deviceQueueCreateInfosPtr = deviceQueueCreateInfos)
         {
-            SType = StructureType.DeviceCreateInfo,
-            QueueCreateInfoCount = 1,
-            PQueueCreateInfos = &deviceQueueCreateInfo,
-            EnabledExtensionCount = 0,
-            PEnabledFeatures = &physicalDeviceFeatures,
+            DeviceCreateInfo deviceCreateInfo = new()
+            {
+                SType = StructureType.DeviceCreateInfo,
+                QueueCreateInfoCount = (uint)deviceQueueCreateInfos.Length,
+                PQueueCreateInfos = deviceQueueCreateInfosPtr,
+                EnabledExtensionCount = 0,
+                PEnabledFeatures = &physicalDeviceFeatures,
 #if DEBUG
-            EnabledLayerCount = (uint)s_validationLayers.Length,
-            PpEnabledLayerNames = layerNames,
+                EnabledLayerCount = (uint)s_validationLayers.Length,
+                PpEnabledLayerNames = layerNames,
 #endif
-        };
+            };
 
-        result = _vk.CreateDevice(_physicalDevice, &deviceCreateInfo, null, out _device);
+            result = _vk.CreateDevice(_physicalDevice, &deviceCreateInfo, null, out _device);
+        }
+
         if (result != Result.Success)
         {
             Console.Error.WriteLine("Failed to create device");
             Environment.Exit(1);
         }
 
-        _vk.GetDeviceQueue(_device, queueFamilyIndices!.Value.GraphicsFamily!.Value, 0, out _graphicsQueue);
+        _vk.GetDeviceQueue(_device, graphicsFamily, 0, out _graphicsQueue);
+        _vk.GetDeviceQueue(_device, presentationFamily, 0, out _presentationQueue);
 
         // TODO: Make sure these are always deleted before returning.
         // Right now, "Environment.Exit(1);" takes care of the memory leaks.
@@ -198,31 +229,21 @@ public sealed class GraphicsContext : IDisposable
 
     public unsafe void Dispose()
     {
-        _vk!.DestroyDevice(_device, null);
+        _vk.DestroyDevice(_device, null);
 #if DEBUG
         _debugUtils!.DestroyDebugUtilsMessenger(_instance, _debugMessenger, null);
 #endif
-        _vk!.DestroyInstance(_instance, null);
-        _vk!.Dispose();
-    }
-
-    private unsafe string[] GetRequiredExtensions()
-    {
-        var surfaceExtensions = _surface!.GetRequiredExtensions(out uint surfaceExtensionCount);
-        var extensions = SilkMarshal.PtrToStringArray((nint)surfaceExtensions, (int)surfaceExtensionCount);
-#if DEBUG
-        extensions = [..extensions, ExtDebugUtils.ExtensionName];
-#endif
-        return extensions;
+        _vk.DestroyInstance(_instance, null);
+        _vk.Dispose();
     }
 
 #if DEBUG
     private unsafe bool AreRequiredValidationLayersSupported()
     {
         uint layerCount = 0;
-        _vk!.EnumerateInstanceLayerProperties(&layerCount, null);
+        _vk.EnumerateInstanceLayerProperties(&layerCount, null);
         var layers = new LayerProperties[layerCount];
-        _vk!.EnumerateInstanceLayerProperties(&layerCount, layers);
+        _vk.EnumerateInstanceLayerProperties(&layerCount, layers);
         var availableLayers = layers.Select(layer => Marshal.PtrToStringAnsi((nint)layer.LayerName)).ToHashSet();
         return s_validationLayers.All(availableLayers.Contains);
     }
@@ -255,15 +276,20 @@ public sealed class GraphicsContext : IDisposable
         QueueFamilyIndices indices = new();
 
         uint queueFamilyCount = 0;
-        _vk!.GetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, null);
+        _vk.GetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, null);
         var queueFamilies = new QueueFamilyProperties[queueFamilyCount];
-        _vk!.GetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, queueFamilies);
+        _vk.GetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, queueFamilies);
 
         for (uint i = 0; i < queueFamilyCount; ++i)
         {
             var queueFamily = queueFamilies[i];
+
             if (queueFamily.QueueFlags.HasFlag(QueueFlags.GraphicsBit))
                 indices.GraphicsFamily = i;
+
+            _khrSurface.GetPhysicalDeviceSurfaceSupport(physicalDevice, i, _surfaceKHR, out var presentationSupport);
+            if (presentationSupport)
+                indices.PresentationFamily = i;
 
             if (indices.IsComplete)
             {
