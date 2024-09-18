@@ -51,16 +51,17 @@ public sealed class GraphicsContext : IDisposable
     private Queue _graphicsQueue;
     private Queue _presentationQueue;
     private KhrSwapchain? _khrSwapchain;
-    private SwapchainKHR _swapchain;
-    private Image[]? _images;
-    private Format _surfaceFormat;
-    private Extent2D _extent;
-    private ImageView[]? _imageViews;
+    private SwapchainKHR _swapChain;
+    private Image[]? _swapChainImages;
+    private Format _swapChainImageFormat;
+    private Extent2D _swapChainImageExtent;
+    private ImageView[]? _swapChainImageViews;
 
     public Vk VK => _vk!;
     public Instance Instance => _instance!;
     public Device Device => _device!;
-    public Extent2D Extent => _extent!;
+    public Format SwapChainImageFormat => _swapChainImageFormat!;
+    public Extent2D SwapChainImageExtent => _swapChainImageExtent!;
 
     public static unsafe GraphicsContext? Create(IWindow window)
     {
@@ -68,7 +69,6 @@ public sealed class GraphicsContext : IDisposable
         return context._vk != null ? context : null;
     }
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private unsafe GraphicsContext(IWindow window)
     {
         // Get list of extensions for the instance.
@@ -145,8 +145,8 @@ public sealed class GraphicsContext : IDisposable
     // This even works if it was only partially created or already partially or entirely disposed.
     public unsafe void Dispose()
     {
-        DisposeHelper.Dispose(ref _imageViews, handle => _vk!.DestroyImageView(_device, handle, null));
-        DisposeHelper.Dispose(ref _swapchain, handle => _khrSwapchain!.DestroySwapchain(_device, handle, null));
+        DisposeHelper.Dispose(ref _swapChainImageViews, handle => _vk!.DestroyImageView(_device, handle, null));
+        DisposeHelper.Dispose(ref _swapChain, handle => _khrSwapchain!.DestroySwapchain(_device, handle, null));
         DisposeHelper.Dispose(ref _khrSwapchain);
         DisposeHelper.Dispose(ref _device, handle => _vk!.DestroyDevice(handle, null));
         DisposeHelper.Dispose(ref _surface, handle => _khrSurface!.DestroySurface(_instance, handle, null));
@@ -469,17 +469,17 @@ public sealed class GraphicsContext : IDisposable
         if (!_vk!.TryGetDeviceExtension(_instance, _device, out _khrSwapchain))
             throw new Exception("Failed to get the swap chain extension.");
 
-        var result = _khrSwapchain!.CreateSwapchain(_device, &swapchainCreateInfo, null, out _swapchain);
+        var result = _khrSwapchain!.CreateSwapchain(_device, &swapchainCreateInfo, null, out _swapChain);
         if (result != Result.Success)
             throw new Exception("Failed to create swapchain.");
 
-        _khrSwapchain!.GetSwapchainImages(_device, _swapchain, &imageCount, null);
+        _khrSwapchain!.GetSwapchainImages(_device, _swapChain, &imageCount, null);
         var images = new Image[imageCount];
-        _khrSwapchain!.GetSwapchainImages(_device, _swapchain, &imageCount, images);
-        _images = images;
+        _khrSwapchain!.GetSwapchainImages(_device, _swapChain, &imageCount, images);
+        _swapChainImages = images;
 
-        _surfaceFormat = surfaceFormat.Format;
-        _extent = extent;
+        _swapChainImageFormat = surfaceFormat.Format;
+        _swapChainImageExtent = extent;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -517,13 +517,13 @@ public sealed class GraphicsContext : IDisposable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private unsafe void CreateImageViews()
     {
-        _imageViews = new ImageView[_images!.Length];
+        _swapChainImageViews = new ImageView[_swapChainImages!.Length];
 
         ImageViewCreateInfo imageViewCreateInfo = new()
         {
             SType = StructureType.ImageViewCreateInfo,
             ViewType = ImageViewType.Type2D,
-            Format = _surfaceFormat,
+            Format = _swapChainImageFormat,
             Components =
             {
                 R = ComponentSwizzle.Identity,
@@ -541,10 +541,10 @@ public sealed class GraphicsContext : IDisposable
             },
         };
 
-        for (uint i = 0; i < _images.Length; ++i)
+        for (uint i = 0; i < _swapChainImages.Length; ++i)
         {
-            imageViewCreateInfo.Image = _images[i];
-            if (_vk!.CreateImageView(_device, &imageViewCreateInfo, null, out _imageViews[i]) != Result.Success)
+            imageViewCreateInfo.Image = _swapChainImages[i];
+            if (_vk!.CreateImageView(_device, &imageViewCreateInfo, null, out _swapChainImageViews[i]) != Result.Success)
                 throw new Exception("Failed to create image view.");
         }
     }

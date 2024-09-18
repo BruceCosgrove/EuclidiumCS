@@ -18,32 +18,35 @@ public sealed class Shader : IDisposable
     }
 
     private PipelineLayout _pipelineLayout;
+    private RenderPass _renderPass;
+    private Pipeline _pipeline;
 
     public static Shader? Create(string filepath)
     {
-        Shader shader = new(GetShaderStages(filepath));
-        // TODO: return null if failed.
-        return shader;
+        Shader shader = new(filepath);
+        return shader._pipelineLayout.Handle != 0 ? shader : null;
     }
 
-    private Shader(ShaderStage[] stages)
+    private Shader(string filepath)
     {
         try
         {
+            // Get each shader stage.
+            var stages = GetShaderStages(filepath);
+
             // Get each shader stage binary.
             GetStageBinaries(stages);
 
-            // Create pipeline.
+            // Create the render pass.
+            CreateRenderPass();
+
+            // Create the pipeline.
             CreatePipeline(stages);
         }
         catch (Exception e)
         {
-            Dispose();
+            Dispose(); // Dispose what was partially created.
             Console.Error.WriteLine(e);
-        }
-        finally
-        {
-
         }
     }
 
@@ -53,9 +56,12 @@ public sealed class Shader : IDisposable
         var vk = context.VK;
         var device = context.Device;
 
+        DisposeHelper.Dispose(ref _pipeline, handle => vk.DestroyPipeline(device, _pipeline, null));
+        DisposeHelper.Dispose(ref _renderPass, handle => vk.DestroyRenderPass(device, handle, null));
         DisposeHelper.Dispose(ref _pipelineLayout, handle => vk.DestroyPipelineLayout(device, _pipelineLayout, null));
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static ShaderStage[] GetShaderStages(string filepath)
     {
         var sources = new ShaderStage[s_stageExtensions.Count];
@@ -110,12 +116,62 @@ public sealed class Shader : IDisposable
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private unsafe void CreateRenderPass()
+    {
+        var context = Engine.Instance.Window.Context;
+        var vk = context.VK;
+        var device = context.Device;
+        var swapChainImageFormat = context.SwapChainImageFormat;
+
+        AttachmentDescription attachmentDescription = new()
+        {
+            Format = swapChainImageFormat, // TODO
+            Samples = SampleCountFlags.Count1Bit, // TODO
+            LoadOp = AttachmentLoadOp.Clear, // TODO
+            StoreOp = AttachmentStoreOp.Store, // TODO
+            StencilLoadOp = AttachmentLoadOp.DontCare, // TODO
+            StencilStoreOp = AttachmentStoreOp.DontCare, // TODO
+            InitialLayout = ImageLayout.Undefined, // TODO
+            FinalLayout = ImageLayout.PresentSrcKhr, // TODO
+        };
+
+        AttachmentReference attachmentReference = new()
+        {
+            Attachment = 0, // TODO
+            Layout = ImageLayout.ColorAttachmentOptimal, // TODO
+        };
+
+        SubpassDescription subpassDescription = new()
+        {
+            PipelineBindPoint = PipelineBindPoint.Graphics, // TODO
+            ColorAttachmentCount = 1, // TODO
+            PColorAttachments = &attachmentReference,
+            // TODO: 6 other parameters
+        };
+
+        RenderPassCreateInfo renderPassCreateInfo = new()
+        {
+            SType = StructureType.RenderPassCreateInfo,
+            AttachmentCount = 1, // TODO
+            PAttachments = &attachmentDescription, // TODO
+            SubpassCount = 1, // TODO
+            PSubpasses = &subpassDescription, // TODO
+            // TODO: 2 other parameters
+        };
+
+        if (vk.CreateRenderPass(device, &renderPassCreateInfo, null, out _renderPass) != Result.Success)
+            throw new Exception("Failed to create render pass.");
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private unsafe void CreatePipeline(ShaderStage[] stages)
     {
         var context = Engine.Instance.Window.Context;
         var vk = context.VK;
         var device = context.Device;
-        var extent = context.Extent;
+        var extent = context.SwapChainImageExtent;
+
+        var pipelineShaderStageCreateInfos = new PipelineShaderStageCreateInfo[stages.Length];
 
         ShaderModule[]? modules = new ShaderModule[stages.Length];
         var entrypointName = (byte*)SilkMarshal.StringToPtr("main");
@@ -123,9 +179,6 @@ public sealed class Shader : IDisposable
         try
         {
             // Create the shader modules and create infos.
-
-            var pipelineShaderStageCreateInfos = new PipelineShaderStageCreateInfo[stages.Length];
-
             for (int i = 0; i < stages.Length; ++i)
             {
                 ref var stage = ref stages[i];
@@ -151,15 +204,6 @@ public sealed class Shader : IDisposable
                     PName = entrypointName,
                 };
             }
-
-            //var dynamicStates = stackalloc[] { DynamicState.Viewport, DynamicState.Scissor }.ToArray();
-
-            //PipelineDynamicStateCreateInfo pipelineDynamicStateCreateInfo = new()
-            //{
-            //    SType = StructureType.PipelineDynamicStateCreateInfo,
-            //    DynamicStateCount = (uint)dynamicStates.Length,
-            //    PDynamicStates = dynamicStatesPtr,
-            //};
 
             PipelineVertexInputStateCreateInfo pipelineVertexInputStateCreateInfo = new()
             {
@@ -212,7 +256,7 @@ public sealed class Shader : IDisposable
                 PolygonMode = PolygonMode.Fill, // TODO (things like wireframe)
                 CullMode = CullModeFlags.BackBit, // TODO
                 FrontFace = FrontFace.Clockwise, // TODO
-                DepthBiasEnable = false, // TODO: 3 other depth bias parameters
+                DepthBiasEnable = false, // TODO: 3 other parameters (all for depth bias)
                 LineWidth = 1f, // TODO
             };
 
@@ -256,6 +300,44 @@ public sealed class Shader : IDisposable
 
             if (vk.CreatePipelineLayout(device, &pipelineLayoutCreateInfo, null, out _pipelineLayout) != Result.Success)
                 throw new Exception("Failed to create pipeline layout.");
+
+            var dynamicStates = stackalloc[] { DynamicState.Viewport, DynamicState.Scissor }.ToArray();
+            fixed (DynamicState* dynamicStatesPtr = dynamicStates)
+            fixed (PipelineShaderStageCreateInfo* pipelineShaderStageCreateInfosPtr = pipelineShaderStageCreateInfos)
+            {
+                PipelineDynamicStateCreateInfo pipelineDynamicStateCreateInfo = new()
+                {
+                    SType = StructureType.PipelineDynamicStateCreateInfo,
+                    DynamicStateCount = (uint)dynamicStates.Length,
+                    PDynamicStates = dynamicStatesPtr,
+                };
+
+                GraphicsPipelineCreateInfo pipelineCreateInfo = new()
+                {
+                    SType = StructureType.GraphicsPipelineCreateInfo,
+                    StageCount = (uint)stages.Length,
+                    PStages = pipelineShaderStageCreateInfosPtr,
+                    PVertexInputState = &pipelineVertexInputStateCreateInfo,
+                    PInputAssemblyState = &pipelineInputAssemblyStateCreateInfo,
+                    PTessellationState = null, // TODO
+                    PViewportState = &pipelineViewportStateCreateInfo,
+                    PRasterizationState = &pipelineRasterizationStateCreateInfo,
+                    PMultisampleState = &pipelineMultisampleStateCreateInfo,
+                    PDepthStencilState = null, // TODO
+                    PColorBlendState = &pipelineColorBlendStateCreateInfo,
+                    PDynamicState = &pipelineDynamicStateCreateInfo,
+                    Layout = _pipelineLayout,
+                    RenderPass = _renderPass,
+                    Subpass = 0, // TODO
+                    // TODO: 2 other parameters (for recreating the pipeline)
+                };
+
+                fixed (Pipeline* pipelinePtr = &_pipeline)
+                {
+                    if (vk.CreateGraphicsPipelines(device, default, 1, &pipelineCreateInfo, null, pipelinePtr) != Result.Success)
+                        throw new Exception("Failed to create pipeline.");
+                }
+            }
         }
         finally
         {
