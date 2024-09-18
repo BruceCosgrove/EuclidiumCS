@@ -21,13 +21,7 @@ public sealed class Shader : IDisposable
     private RenderPass _renderPass;
     private Pipeline _pipeline;
 
-    public static Shader? Create(string filepath)
-    {
-        Shader shader = new(filepath);
-        return shader._pipelineLayout.Handle != 0 ? shader : null;
-    }
-
-    private Shader(string filepath)
+    public Shader(string filepath)
     {
         try
         {
@@ -43,10 +37,10 @@ public sealed class Shader : IDisposable
             // Create the pipeline.
             CreatePipeline(stages);
         }
-        catch (Exception e)
+        catch
         {
             Dispose(); // Dispose what was partially created.
-            Console.Error.WriteLine(e);
+            throw;
         }
     }
 
@@ -304,6 +298,7 @@ public sealed class Shader : IDisposable
             var dynamicStates = stackalloc[] { DynamicState.Viewport, DynamicState.Scissor }.ToArray();
             fixed (DynamicState* dynamicStatesPtr = dynamicStates)
             fixed (PipelineShaderStageCreateInfo* pipelineShaderStageCreateInfosPtr = pipelineShaderStageCreateInfos)
+            fixed (Pipeline* pipelinePtr = &_pipeline)
             {
                 PipelineDynamicStateCreateInfo pipelineDynamicStateCreateInfo = new()
                 {
@@ -332,11 +327,8 @@ public sealed class Shader : IDisposable
                     // TODO: 2 other parameters (for recreating the pipeline)
                 };
 
-                fixed (Pipeline* pipelinePtr = &_pipeline)
-                {
-                    if (vk.CreateGraphicsPipelines(device, default, 1, &pipelineCreateInfo, null, pipelinePtr) != Result.Success)
-                        throw new Exception("Failed to create pipeline.");
-                }
+                if (vk.CreateGraphicsPipelines(device, default, 1, &pipelineCreateInfo, null, pipelinePtr) != Result.Success)
+                    throw new Exception("Failed to create pipeline.");
             }
         }
         finally

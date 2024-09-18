@@ -53,6 +53,7 @@ public sealed class Window
     public event Action<Vector2D<int>>? MouseMove;
 
     /* Values */
+
     public GraphicsContext Context => _graphicsContext!;
     public IKeyboard Keyboard => _inputContext!.Keyboards[0];
     public IMouse Mouse => _inputContext!.Mice[0];
@@ -74,7 +75,6 @@ public sealed class Window
             }
         }
     }
-
 
     internal Window()
     {
@@ -136,7 +136,7 @@ public sealed class Window
         }
 
         // Create graphics context.
-        _graphicsContext = GraphicsContext.Create(_window);
+        _graphicsContext = new(_window);
 
         // Create ImGui context.
         // TODO: Rewrite ImGuiController (name it ImGuiContext) using imgui's vulkan backend as an example.

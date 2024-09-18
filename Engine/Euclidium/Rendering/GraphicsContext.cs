@@ -63,13 +63,7 @@ public sealed class GraphicsContext : IDisposable
     public Format SwapChainImageFormat => _swapChainImageFormat!;
     public Extent2D SwapChainImageExtent => _swapChainImageExtent!;
 
-    public static unsafe GraphicsContext? Create(IWindow window)
-    {
-        GraphicsContext context = new(window);
-        return context._vk != null ? context : null;
-    }
-
-    private unsafe GraphicsContext(IWindow window)
+    public unsafe GraphicsContext(IWindow window)
     {
         // Get list of extensions for the instance.
         // NOTE: this is here because the below allocations
@@ -123,10 +117,10 @@ public sealed class GraphicsContext : IDisposable
             // Create image views.
             CreateImageViews();
         }
-        catch (Exception e)
+        catch
         {
             Dispose(); // Dispose what was partially created.
-            Console.Error.WriteLine(e);
+            throw;
         }
         finally
         {

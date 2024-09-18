@@ -58,7 +58,7 @@ internal sealed partial class Client
         //}, out _framebuffer!);
 
         // Shaders
-        Shader.Create("./Resources/Shaders/VulkanBootstrap")?.Dispose(); // TODO
+        new Shader("./Resources/Shaders/VulkanBootstrap").Dispose(); // TODO
         //_slicingShader = Shader.Create("./Resources/Shaders/Slicing4D");
         //_projectingShader = Shader.Create("./Resources/Shaders/Projecting4D");
 
