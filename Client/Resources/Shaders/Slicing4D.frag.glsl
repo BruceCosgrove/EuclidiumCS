@@ -6,5 +6,5 @@ layout (location = 0) out vec4 oColor;
 
 void main()
 {
-	oColor = iColor;
+    oColor = iColor;
 }

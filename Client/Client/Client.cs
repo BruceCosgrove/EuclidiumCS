@@ -38,8 +38,8 @@ internal sealed partial class Client
 
     protected override void InitializeCallbacks()
     {
-        //Window.RenderInit += OnRenderInit;
-        //Window.RenderShutdown += OnRenderShutdown;
+        Window.RenderInit += OnRenderInit;
+        Window.RenderShutdown += OnRenderShutdown;
         //Window.Update += OnUpdate;
         //Window.Render += OnRender;
         //Window.ImGuiRender += OnImGuiRender;
@@ -57,9 +57,10 @@ internal sealed partial class Client
         //    DepthAttachment = new(FramebufferFormat.Du24_Su8),
         //}, out _framebuffer!);
 
-        //// Shaders
-        //_slicingShader = new("./Resources/Shaders/Slicing4D");
-        //_projectingShader = new("./Resources/Shaders/Projecting4D");
+        // Shaders
+        Shader.Create("./Resources/Shaders/VulkanBootstrap")?.Dispose(); // TODO
+        //_slicingShader = Shader.Create("./Resources/Shaders/Slicing4D");
+        //_projectingShader = Shader.Create("./Resources/Shaders/Projecting4D");
 
         //// Vertex buffer
         //var layout = new VertexBufferLayout
@@ -95,12 +96,12 @@ internal sealed partial class Client
 
     private void OnRenderShutdown()
     {
-        //_framebuffer!.Destroy();
-        //_slicingShader!.Destroy();
-        //_projectingShader!.Destroy();
-        //_vertexBuffer!.Destroy();
-        //_cellIndexBuffer!.Destroy();
-        //_edgeIndexBuffer!.Destroy();
+        //_framebuffer!.Dispose();
+        //_slicingShader!.Dispose();
+        //_projectingShader!.Dispose();
+        //_vertexBuffer!.Dispose();
+        //_cellIndexBuffer!.Dispose();
+        //_edgeIndexBuffer!.Dispose();
     }
 
     private void OnUpdate(double deltaTime)

@@ -59,6 +59,8 @@ public sealed class GraphicsContext : IDisposable
 
     public Vk VK => _vk!;
     public Instance Instance => _instance!;
+    public Device Device => _device!;
+    public Extent2D Extent => _extent!;
 
     public static unsafe GraphicsContext? Create(IWindow window)
     {
@@ -80,8 +82,8 @@ public sealed class GraphicsContext : IDisposable
 #endif
 
         // Allocate a few unmanaged objects.
-        var applicationName = (byte*)Marshal.StringToHGlobalAnsi("EuclidiumCS");
-        var engineName = (byte*)Marshal.StringToHGlobalAnsi("Euclidium");
+        var applicationName = (byte*)SilkMarshal.StringToPtr("EuclidiumCS");
+        var engineName = (byte*)SilkMarshal.StringToPtr("Euclidium");
         var instanceExtensionNames = (byte**)SilkMarshal.StringArrayToPtr(instanceExtensions);
         var deviceExtensionNames = (byte**)SilkMarshal.StringArrayToPtr(s_requiredDeviceExtensions);
 #if DEBUG
@@ -129,13 +131,13 @@ public sealed class GraphicsContext : IDisposable
         finally
         {
             // Deallocate all the unmanaged objects, regardless of exceptions.
-            Marshal.FreeHGlobal((nint)applicationName);
-            Marshal.FreeHGlobal((nint)engineName);
-            SilkMarshal.Free((nint)instanceExtensionNames);
-            SilkMarshal.Free((nint)deviceExtensionNames);
 #if DEBUG
             SilkMarshal.Free((nint)layerNames);
 #endif
+            SilkMarshal.Free((nint)deviceExtensionNames);
+            SilkMarshal.Free((nint)instanceExtensionNames);
+            SilkMarshal.Free((nint)engineName);
+            SilkMarshal.Free((nint)applicationName);
         }
     }
 
@@ -143,43 +145,18 @@ public sealed class GraphicsContext : IDisposable
     // This even works if it was only partially created or already partially or entirely disposed.
     public unsafe void Dispose()
     {
-        Dispose(ref _imageViews, handle => _vk!.DestroyImageView(_device, handle, null));
-        Dispose(ref _swapchain, handle => _khrSwapchain!.DestroySwapchain(_device, handle, null));
-        Dispose(ref _khrSwapchain);
-        Dispose(ref _device, handle => _vk!.DestroyDevice(handle, null));
-        Dispose(ref _surface, handle => _khrSurface!.DestroySurface(_instance, handle, null));
-        Dispose(ref _khrSurface);
+        DisposeHelper.Dispose(ref _imageViews, handle => _vk!.DestroyImageView(_device, handle, null));
+        DisposeHelper.Dispose(ref _swapchain, handle => _khrSwapchain!.DestroySwapchain(_device, handle, null));
+        DisposeHelper.Dispose(ref _khrSwapchain);
+        DisposeHelper.Dispose(ref _device, handle => _vk!.DestroyDevice(handle, null));
+        DisposeHelper.Dispose(ref _surface, handle => _khrSurface!.DestroySurface(_instance, handle, null));
+        DisposeHelper.Dispose(ref _khrSurface);
 #if DEBUG
-        Dispose(ref _debugMessenger, handle => _debugUtils!.DestroyDebugUtilsMessenger(_instance, handle, null));
-        Dispose(ref _debugUtils);
+        DisposeHelper.Dispose(ref _debugMessenger, handle => _debugUtils!.DestroyDebugUtilsMessenger(_instance, handle, null));
+        DisposeHelper.Dispose(ref _debugUtils);
 #endif
-        Dispose(ref _instance, handle => _vk!.DestroyInstance(handle, null));
-        Dispose(ref _vk);
-    }
-
-    private static void Dispose<T>(ref T[]? handles, Action<T> destroyFunc) where T : struct
-    {
-        if (handles != null)
-            for (uint i = 0; i < handles.Length; ++i)
-                Dispose(ref handles[i], destroyFunc);
-    }
-
-    private static void Dispose<T>(ref T handle, Action<T> destroyFunc) where T : struct
-    {
-        if (!handle.Equals(default(T)))
-        {
-            destroyFunc(handle);
-            handle = default;
-        }
-    }
-
-    private static void Dispose<T>(ref T? disposable) where T : class, IDisposable
-    {
-        if (disposable != null)
-        {
-            disposable.Dispose();
-            disposable = null;
-        }
+        DisposeHelper.Dispose(ref _instance, handle => _vk!.DestroyInstance(handle, null));
+        DisposeHelper.Dispose(ref _vk);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

@@ -5,11 +5,14 @@ layout (location = 1) in vec4 iColor;
 
 layout (location = 0) out vec4 oColor;
 
-uniform mat4 uViewProjection;
-uniform mat4 uRotation4D;
+layout (push_constant) uniform Constants
+{
+    mat4 uViewProjection;
+    mat4 uRotation4D;
+};
 
 void main()
 {
-	oColor = iColor;
-	gl_Position = uViewProjection * vec4((uRotation4D * iPosition).xyz, 1);
+    oColor = iColor;
+    gl_Position = uViewProjection * vec4((uRotation4D * iPosition).xyz, 1);
 }
