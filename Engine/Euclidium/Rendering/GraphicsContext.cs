@@ -3,7 +3,9 @@ using Silk.NET.Core;
 using Silk.NET.Vulkan;
 using Silk.NET.Windowing;
 using System.Runtime.InteropServices;
+#if DEBUG
 using Silk.NET.Vulkan.Extensions.EXT;
+#endif
 using Silk.NET.Vulkan.Extensions.KHR;
 using System.Runtime.CompilerServices;
 
@@ -56,6 +58,7 @@ public sealed class GraphicsContext : IDisposable
     private Format _swapChainImageFormat;
     private Extent2D _swapChainImageExtent;
     private ImageView[]? _swapChainImageViews;
+    private Silk.NET.Vulkan.Framebuffer[]? _swapChainFramebuffers;
 
     public Vk VK => _vk!;
     public Instance Instance => _instance!;
@@ -139,6 +142,7 @@ public sealed class GraphicsContext : IDisposable
     // This even works if it was only partially created or already partially or entirely disposed.
     public unsafe void Dispose()
     {
+        DisposeHelper.Dispose(ref _swapChainFramebuffers, handle => _vk!.DestroyFramebuffer(_device, handle, null));
         DisposeHelper.Dispose(ref _swapChainImageViews, handle => _vk!.DestroyImageView(_device, handle, null));
         DisposeHelper.Dispose(ref _swapChain, handle => _khrSwapchain!.DestroySwapchain(_device, handle, null));
         DisposeHelper.Dispose(ref _khrSwapchain);
@@ -540,6 +544,33 @@ public sealed class GraphicsContext : IDisposable
             imageViewCreateInfo.Image = _swapChainImages[i];
             if (_vk!.CreateImageView(_device, &imageViewCreateInfo, null, out _swapChainImageViews[i]) != Result.Success)
                 throw new Exception("Failed to create image view.");
+        }
+    }
+
+    // TODO: This is a terrible solution.
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public unsafe void InitializeSwapChainFramebuffers(RenderPass renderPass)
+    {
+        _swapChainFramebuffers = new Silk.NET.Vulkan.Framebuffer[_swapChainImageViews!.Length];
+
+        for (int i = 0; i < _swapChainImageViews.Length; ++i)
+        {
+            var attachments = stackalloc[] { _swapChainImageViews[i] };
+
+            //ImageView
+            FramebufferCreateInfo framebufferCreateInfo = new()
+            {
+                SType = StructureType.FramebufferCreateInfo,
+                RenderPass = renderPass.Handle,
+                AttachmentCount = 1, // TODO
+                PAttachments = attachments, // TODO
+                Width = _swapChainImageExtent.Width,
+                Height = _swapChainImageExtent.Height,
+                Layers = 1, // TODO
+            };
+
+            if (_vk!.CreateFramebuffer(_device, &framebufferCreateInfo, null, out _swapChainFramebuffers[i]) != Result.Success)
+                throw new Exception("Failed to create swap chain framebuffer.");
         }
     }
 }

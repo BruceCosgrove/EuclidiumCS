@@ -48,6 +48,9 @@ internal sealed partial class Client
 
     private void OnRenderInit()
     {
+        var context = Engine.Instance.Window.Context;
+        var swapChainImageFormat = context.SwapChainImageFormat;
+
         //// Framebuffer
         //Euclidium.Rendering.Framebuffer.Create(new()
         //{
@@ -57,8 +60,34 @@ internal sealed partial class Client
         //    DepthAttachment = new(FramebufferFormat.Du24_Su8),
         //}, out _framebuffer!);
 
+        AttachmentDescription[] renderPassDescription =
+        [
+            new()
+            {
+                Format = swapChainImageFormat,
+                Samples = SampleCountFlags.Count1Bit,
+                LoadOp = AttachmentLoadOp.Clear, // TODO: eventually replace with AttachmentLoadOp.DontCare
+                StoreOp = AttachmentStoreOp.Store,
+                StencilLoadOp = AttachmentLoadOp.DontCare,
+                StencilStoreOp = AttachmentStoreOp.DontCare,
+                InitialLayout = ImageLayout.Undefined,
+                FinalLayout = ImageLayout.PresentSrcKhr,
+            },
+        ];
+        AttachmentReference[] renderPassColorAttachments =
+        [
+            new()
+            {
+                Attachment = 0,
+                Layout = ImageLayout.ColorAttachmentOptimal,
+            },
+        ];
+        using Euclidium.Rendering.RenderPass renderPass = new(renderPassDescription, renderPassColorAttachments);
+
+        context.InitializeSwapChainFramebuffers(renderPass);
+
         // Shaders
-        new Shader("./Resources/Shaders/VulkanBootstrap").Dispose(); // TODO
+        using Shader shader = new("./Resources/Shaders/VulkanBootstrap", renderPass);
         //_slicingShader = Shader.Create("./Resources/Shaders/Slicing4D");
         //_projectingShader = Shader.Create("./Resources/Shaders/Projecting4D");
 

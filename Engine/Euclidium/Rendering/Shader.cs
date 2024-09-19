@@ -14,14 +14,17 @@ public sealed class Shader : IDisposable
         public ShaderKind Kind = kind;
         public string Filename = filename;
         public string Code = code;
-        public byte[]? Binary = null;
+        public byte[]? Binary;
     }
 
     private PipelineLayout _pipelineLayout;
-    private RenderPass _renderPass;
     private Pipeline _pipeline;
 
-    public Shader(string filepath)
+    private RenderPass? _renderPass;
+
+    public RenderPass RenderPass => _renderPass!;
+
+    public Shader(string filepath, RenderPass renderPass)
     {
         try
         {
@@ -31,17 +34,16 @@ public sealed class Shader : IDisposable
             // Get each shader stage binary.
             GetStageBinaries(stages);
 
-            // Create the render pass.
-            CreateRenderPass();
-
             // Create the pipeline.
-            CreatePipeline(stages);
+            CreatePipeline(stages, renderPass);
         }
         catch
         {
             Dispose(); // Dispose what was partially created.
             throw;
         }
+
+        _renderPass = renderPass;
     }
 
     public unsafe void Dispose()
@@ -51,8 +53,9 @@ public sealed class Shader : IDisposable
         var device = context.Device;
 
         DisposeHelper.Dispose(ref _pipeline, handle => vk.DestroyPipeline(device, _pipeline, null));
-        DisposeHelper.Dispose(ref _renderPass, handle => vk.DestroyRenderPass(device, handle, null));
         DisposeHelper.Dispose(ref _pipelineLayout, handle => vk.DestroyPipelineLayout(device, _pipelineLayout, null));
+
+        _renderPass = null;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -110,55 +113,7 @@ public sealed class Shader : IDisposable
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private unsafe void CreateRenderPass()
-    {
-        var context = Engine.Instance.Window.Context;
-        var vk = context.VK;
-        var device = context.Device;
-        var swapChainImageFormat = context.SwapChainImageFormat;
-
-        AttachmentDescription attachmentDescription = new()
-        {
-            Format = swapChainImageFormat, // TODO
-            Samples = SampleCountFlags.Count1Bit, // TODO
-            LoadOp = AttachmentLoadOp.Clear, // TODO
-            StoreOp = AttachmentStoreOp.Store, // TODO
-            StencilLoadOp = AttachmentLoadOp.DontCare, // TODO
-            StencilStoreOp = AttachmentStoreOp.DontCare, // TODO
-            InitialLayout = ImageLayout.Undefined, // TODO
-            FinalLayout = ImageLayout.PresentSrcKhr, // TODO
-        };
-
-        AttachmentReference attachmentReference = new()
-        {
-            Attachment = 0, // TODO
-            Layout = ImageLayout.ColorAttachmentOptimal, // TODO
-        };
-
-        SubpassDescription subpassDescription = new()
-        {
-            PipelineBindPoint = PipelineBindPoint.Graphics, // TODO
-            ColorAttachmentCount = 1, // TODO
-            PColorAttachments = &attachmentReference,
-            // TODO: 6 other parameters
-        };
-
-        RenderPassCreateInfo renderPassCreateInfo = new()
-        {
-            SType = StructureType.RenderPassCreateInfo,
-            AttachmentCount = 1, // TODO
-            PAttachments = &attachmentDescription, // TODO
-            SubpassCount = 1, // TODO
-            PSubpasses = &subpassDescription, // TODO
-            // TODO: 2 other parameters
-        };
-
-        if (vk.CreateRenderPass(device, &renderPassCreateInfo, null, out _renderPass) != Result.Success)
-            throw new Exception("Failed to create render pass.");
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private unsafe void CreatePipeline(ShaderStage[] stages)
+    private unsafe void CreatePipeline(ShaderStage[] stages, RenderPass renderPass)
     {
         var context = Engine.Instance.Window.Context;
         var vk = context.VK;
@@ -322,7 +277,7 @@ public sealed class Shader : IDisposable
                     PColorBlendState = &pipelineColorBlendStateCreateInfo,
                     PDynamicState = &pipelineDynamicStateCreateInfo,
                     Layout = _pipelineLayout,
-                    RenderPass = _renderPass,
+                    RenderPass = renderPass.Handle,
                     Subpass = 0, // TODO
                     // TODO: 2 other parameters (for recreating the pipeline)
                 };
