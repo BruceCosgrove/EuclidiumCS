@@ -12,12 +12,13 @@ public sealed class RenderPass : IDisposable
 
     public RenderPass(
         AttachmentDescription[] attachmentDescriptions,
-        AttachmentReference[] colorAttachments
+        AttachmentReference[] colorAttachments,
+        SubpassDependency[] dependencies
     ) {
         try
         {
             // Create the render pass.
-            CreateRenderPass(attachmentDescriptions, colorAttachments);
+            CreateRenderPass(attachmentDescriptions, colorAttachments, dependencies);
         }
         catch
         {
@@ -38,7 +39,8 @@ public sealed class RenderPass : IDisposable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private unsafe void CreateRenderPass(
         AttachmentDescription[] attachmentDescriptions,
-        AttachmentReference[] colorAttachments
+        AttachmentReference[] colorAttachments,
+        SubpassDependency[] dependencies
     ) {
         var context = Engine.Instance.Window.Context;
         var vk = context.VK;
@@ -46,6 +48,7 @@ public sealed class RenderPass : IDisposable
 
         fixed (AttachmentDescription* attachmentDescriptionsPtr = attachmentDescriptions)
         fixed (AttachmentReference* colorAttachmentsPtr = colorAttachments)
+        fixed (SubpassDependency* dependenciesPtr = dependencies)
         {
             SubpassDescription subpassDescription = new()
             {
@@ -62,7 +65,8 @@ public sealed class RenderPass : IDisposable
                 PAttachments = attachmentDescriptionsPtr,
                 SubpassCount = 1, // TODO
                 PSubpasses = &subpassDescription, // TODO
-                // TODO: 2 other parameters
+                DependencyCount = (uint)dependencies.Length,
+                PDependencies = dependenciesPtr,
             };
 
             if (vk.CreateRenderPass(device, &renderPassCreateInfo, null, out _renderPass) != Result.Success)

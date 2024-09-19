@@ -58,6 +58,30 @@ public sealed class Shader : IDisposable
         _renderPass = null;
     }
 
+    public unsafe void Bind()
+    {
+        var context = Engine.Instance.Window.Context;
+        var vk = context.VK;
+        var commandBuffer = context.CommandBuffer;
+        var extent = context.SwapChainImageExtent;
+
+        vk.CmdBindPipeline(commandBuffer, PipelineBindPoint.Graphics, _pipeline);
+
+        Viewport viewport = new()
+        {
+            X = 0,
+            Y = 0,
+            Width = extent.Width,
+            Height = extent.Height,
+            MinDepth = 0f,
+            MaxDepth = 1f,
+        };
+        vk.CmdSetViewport(commandBuffer, 0, 1, &viewport);
+
+        Rect2D scissor = new() { Offset = { X = 0, Y = 0 }, Extent = extent };
+        vk.CmdSetScissor(commandBuffer, 0, 1, &scissor);
+    }
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static ShaderStage[] GetShaderStages(string filepath)
     {
@@ -118,7 +142,6 @@ public sealed class Shader : IDisposable
         var context = Engine.Instance.Window.Context;
         var vk = context.VK;
         var device = context.Device;
-        var extent = context.SwapChainImageExtent;
 
         var pipelineShaderStageCreateInfos = new PipelineShaderStageCreateInfo[stages.Length];
 
@@ -170,31 +193,11 @@ public sealed class Shader : IDisposable
                 PrimitiveRestartEnable = false, // TODO
             };
 
-            // TODO
-            Viewport viewport = new()
-            {
-                X = 0,
-                Y = 0,
-                Width = extent.Width,
-                Height = extent.Height,
-                MinDepth = 0f,
-                MaxDepth = 1f,
-            };
-
-            // TODO
-            Rect2D scissor = new()
-            {
-                Offset = { X = 0, Y = 0 },
-                Extent = extent,
-            };
-
             PipelineViewportStateCreateInfo pipelineViewportStateCreateInfo = new()
             {
                 SType = StructureType.PipelineViewportStateCreateInfo,
-                ViewportCount = 1, // TODO
-                PViewports = &viewport, // TODO
-                ScissorCount = 1, // TODO
-                PScissors = &scissor, // TODO
+                ViewportCount = 1, // TODO (e.g. vr support with multiviewport rendering (for each eye))
+                ScissorCount = 1, // TODO (in which case, I imagine the viewport wouldn't resize)
             };
 
             PipelineRasterizationStateCreateInfo pipelineRasterizationStateCreateInfo = new()
@@ -250,7 +253,7 @@ public sealed class Shader : IDisposable
             if (vk.CreatePipelineLayout(device, &pipelineLayoutCreateInfo, null, out _pipelineLayout) != Result.Success)
                 throw new Exception("Failed to create pipeline layout.");
 
-            var dynamicStates = stackalloc[] { DynamicState.Viewport, DynamicState.Scissor }.ToArray();
+            var dynamicStates = stackalloc[] { DynamicState.Viewport, DynamicState.Scissor }.ToArray(); // TODO
             fixed (DynamicState* dynamicStatesPtr = dynamicStates)
             fixed (PipelineShaderStageCreateInfo* pipelineShaderStageCreateInfosPtr = pipelineShaderStageCreateInfos)
             fixed (Pipeline* pipelinePtr = &_pipeline)

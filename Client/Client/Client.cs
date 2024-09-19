@@ -36,12 +36,14 @@ internal sealed partial class Client
     private PropertiesPanel? _propertiesPanel;
     private ViewportPanel? _viewportPanel;
 
+    private Shader? _shader;
+
     protected override void InitializeCallbacks()
     {
         Window.RenderInit += OnRenderInit;
         Window.RenderShutdown += OnRenderShutdown;
         //Window.Update += OnUpdate;
-        //Window.Render += OnRender;
+        Window.Render += OnRender;
         //Window.ImGuiRender += OnImGuiRender;
         //Window.KeyChange += OnKeyChange;
     }
@@ -49,7 +51,7 @@ internal sealed partial class Client
     private void OnRenderInit()
     {
         var context = Engine.Instance.Window.Context;
-        var swapChainImageFormat = context.SwapChainImageFormat;
+        var renderPass = context.RenderPass;
 
         //// Framebuffer
         //Euclidium.Rendering.Framebuffer.Create(new()
@@ -60,34 +62,9 @@ internal sealed partial class Client
         //    DepthAttachment = new(FramebufferFormat.Du24_Su8),
         //}, out _framebuffer!);
 
-        AttachmentDescription[] renderPassDescription =
-        [
-            new()
-            {
-                Format = swapChainImageFormat,
-                Samples = SampleCountFlags.Count1Bit,
-                LoadOp = AttachmentLoadOp.Clear, // TODO: eventually replace with AttachmentLoadOp.DontCare
-                StoreOp = AttachmentStoreOp.Store,
-                StencilLoadOp = AttachmentLoadOp.DontCare,
-                StencilStoreOp = AttachmentStoreOp.DontCare,
-                InitialLayout = ImageLayout.Undefined,
-                FinalLayout = ImageLayout.PresentSrcKhr,
-            },
-        ];
-        AttachmentReference[] renderPassColorAttachments =
-        [
-            new()
-            {
-                Attachment = 0,
-                Layout = ImageLayout.ColorAttachmentOptimal,
-            },
-        ];
-        using Euclidium.Rendering.RenderPass renderPass = new(renderPassDescription, renderPassColorAttachments);
-
-        context.InitializeSwapChainFramebuffers(renderPass);
 
         // Shaders
-        using Shader shader = new("./Resources/Shaders/VulkanBootstrap", renderPass);
+        _shader = new("./Resources/Shaders/VulkanBootstrap", renderPass);
         //_slicingShader = Shader.Create("./Resources/Shaders/Slicing4D");
         //_projectingShader = Shader.Create("./Resources/Shaders/Projecting4D");
 
@@ -131,6 +108,8 @@ internal sealed partial class Client
         //_vertexBuffer!.Dispose();
         //_cellIndexBuffer!.Dispose();
         //_edgeIndexBuffer!.Dispose();
+
+        _shader!.Dispose();
     }
 
     private void OnUpdate(double deltaTime)
@@ -147,6 +126,9 @@ internal sealed partial class Client
 
     private void OnRender(double deltaTime)
     {
+        _shader!.Bind();
+        Window.Context.Draw(); // TODO
+
         //if (!_viewportPanel!.Enabled)
         //    return;
 

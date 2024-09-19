@@ -136,7 +136,8 @@ public sealed class Window
         }
 
         // Create graphics context.
-        _graphicsContext = new(_window);
+        _graphicsContext = new();
+        _graphicsContext.Create(_window);
 
         // Create ImGui context.
         // TODO: Rewrite ImGuiController (name it ImGuiContext) using imgui's vulkan backend as an example.
@@ -199,6 +200,7 @@ public sealed class Window
         //}
         //_imguiController!.Dispose();
 
+        _graphicsContext!.DrainQueues();
         _graphicsContext!.Dispose();
         _inputContext!.Dispose();
     }
@@ -210,6 +212,7 @@ public sealed class Window
 
     private void OnRender(double deltaTime)
     {
+        _graphicsContext!.BeginFrame();
         Render?.Invoke(deltaTime);
 
         //_imguiController!.Update((float)deltaTime);
@@ -225,6 +228,7 @@ public sealed class Window
         //}
 
         //_imguiController!.Render();
+        _graphicsContext!.EndFrame();
     }
 
     private void OnResize(Vector2D<int> size) =>

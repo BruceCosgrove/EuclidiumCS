@@ -58,15 +58,25 @@ public sealed class GraphicsContext : IDisposable
     private Format _swapChainImageFormat;
     private Extent2D _swapChainImageExtent;
     private ImageView[]? _swapChainImageViews;
+    private RenderPass? _renderPass;
     private Silk.NET.Vulkan.Framebuffer[]? _swapChainFramebuffers;
+    private CommandPool _commandPool;
+    private CommandBuffer _commandBuffer;
+    private Silk.NET.Vulkan.Semaphore _imageAvailableSemaphore;
+    private Silk.NET.Vulkan.Semaphore _frameFinishedSemaphore;
+    private Fence _frameInFlightFence;
+
+    private uint _swapChainImageIndex;
 
     public Vk VK => _vk!;
     public Instance Instance => _instance!;
     public Device Device => _device!;
     public Format SwapChainImageFormat => _swapChainImageFormat!;
     public Extent2D SwapChainImageExtent => _swapChainImageExtent!;
+    public RenderPass RenderPass => _renderPass!;
+    public CommandBuffer CommandBuffer => _commandBuffer!;
 
-    public unsafe GraphicsContext(IWindow window)
+    public unsafe void Create(IWindow window)
     {
         // Get list of extensions for the instance.
         // NOTE: this is here because the below allocations
@@ -89,36 +99,30 @@ public sealed class GraphicsContext : IDisposable
 
         try
         {
-            // Create the API.
             CreateAPI(window);
-
-            // Create the instance.
             CreateInstance(applicationName, engineName, instanceExtensions.Length, instanceExtensionNames
 #if DEBUG
                 , layerNames
 #endif
             );
-
-            // Create the surface.
             CreateSurface(window);
 
-            // Pick the physical device and get relevant supported components.
             QueueFamilySupport queueFamilySupport = new();
             SwapChainSupport swapChainSupport = new();
-            SelectPhysicalDevice(ref queueFamilySupport, ref swapChainSupport);
 
-            // Create logical device and get the selected queues.
+            SelectPhysicalDevice(ref queueFamilySupport, ref swapChainSupport);
             CreateDevice(ref queueFamilySupport, deviceExtensionNames
 #if DEBUG
                 , layerNames
 #endif
             );
-
-            // Create swap chain.
             CreateSwapChain(ref queueFamilySupport, ref swapChainSupport);
-
-            // Create image views.
             CreateImageViews();
+            CreateRenderPass();
+            CreateSwapChainFramebuffers();
+            CreateCommandPool(ref queueFamilySupport);
+            CreateCommandBuffer();
+            CreateSynchronizationObjects();
         }
         catch
         {
@@ -142,6 +146,10 @@ public sealed class GraphicsContext : IDisposable
     // This even works if it was only partially created or already partially or entirely disposed.
     public unsafe void Dispose()
     {
+        DisposeHelper.Dispose(ref _frameInFlightFence, handle => _vk!.DestroyFence(_device, handle, null));
+        DisposeHelper.Dispose(ref _frameFinishedSemaphore, handle => _vk!.DestroySemaphore(_device, handle, null));
+        DisposeHelper.Dispose(ref _imageAvailableSemaphore, handle => _vk!.DestroySemaphore(_device, handle, null));
+        DisposeHelper.Dispose(ref _commandPool, handle => _vk!.DestroyCommandPool(_device, handle, null));
         DisposeHelper.Dispose(ref _swapChainFramebuffers, handle => _vk!.DestroyFramebuffer(_device, handle, null));
         DisposeHelper.Dispose(ref _swapChainImageViews, handle => _vk!.DestroyImageView(_device, handle, null));
         DisposeHelper.Dispose(ref _swapChain, handle => _khrSwapchain!.DestroySwapchain(_device, handle, null));
@@ -547,9 +555,48 @@ public sealed class GraphicsContext : IDisposable
         }
     }
 
-    // TODO: This is a terrible solution.
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public unsafe void InitializeSwapChainFramebuffers(RenderPass renderPass)
+    private void CreateRenderPass()
+    {
+        AttachmentDescription[] renderPassDescription =
+        [
+            new()
+            {
+                Format = _swapChainImageFormat,
+                Samples = SampleCountFlags.Count1Bit,
+                LoadOp = AttachmentLoadOp.Clear, // TODO: eventually replace with AttachmentLoadOp.DontCare
+                StoreOp = AttachmentStoreOp.Store,
+                StencilLoadOp = AttachmentLoadOp.DontCare,
+                StencilStoreOp = AttachmentStoreOp.DontCare,
+                InitialLayout = ImageLayout.Undefined,
+                FinalLayout = ImageLayout.PresentSrcKhr,
+            },
+        ];
+        AttachmentReference[] renderPassColorAttachments =
+        [
+            new()
+            {
+                Attachment = 0,
+                Layout = ImageLayout.ColorAttachmentOptimal,
+            },
+        ];
+        SubpassDependency[] subpassDependencies =
+        [
+            new()
+            {
+                SrcSubpass = Vk.SubpassExternal,
+                DstSubpass = 0,
+                SrcStageMask = PipelineStageFlags.ColorAttachmentOutputBit,
+                SrcAccessMask = AccessFlags.None,
+                DstStageMask = PipelineStageFlags.ColorAttachmentOutputBit,
+                DstAccessMask = AccessFlags.ColorAttachmentWriteBit,
+            },
+        ];
+        _renderPass = new(renderPassDescription, renderPassColorAttachments, subpassDependencies);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private unsafe void CreateSwapChainFramebuffers()
     {
         _swapChainFramebuffers = new Silk.NET.Vulkan.Framebuffer[_swapChainImageViews!.Length];
 
@@ -561,7 +608,7 @@ public sealed class GraphicsContext : IDisposable
             FramebufferCreateInfo framebufferCreateInfo = new()
             {
                 SType = StructureType.FramebufferCreateInfo,
-                RenderPass = renderPass.Handle,
+                RenderPass = _renderPass!.Handle,
                 AttachmentCount = 1, // TODO
                 PAttachments = attachments, // TODO
                 Width = _swapChainImageExtent.Width,
@@ -572,5 +619,152 @@ public sealed class GraphicsContext : IDisposable
             if (_vk!.CreateFramebuffer(_device, &framebufferCreateInfo, null, out _swapChainFramebuffers[i]) != Result.Success)
                 throw new Exception("Failed to create swap chain framebuffer.");
         }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private unsafe void CreateCommandPool(ref QueueFamilySupport queueFamilySupport)
+    {
+        uint graphicsFamily = queueFamilySupport.GraphicsFamily!.Value;
+
+        CommandPoolCreateInfo commandPoolCreateInfo = new()
+        {
+            SType = StructureType.CommandPoolCreateInfo,
+            Flags = CommandPoolCreateFlags.ResetCommandBufferBit,
+            QueueFamilyIndex = graphicsFamily,
+        };
+
+        if (_vk!.CreateCommandPool(_device, &commandPoolCreateInfo, null, out _commandPool) != Result.Success)
+            throw new Exception("Failed to create command pool.");
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private unsafe void CreateCommandBuffer()
+    {
+        CommandBufferAllocateInfo commandBufferAllocateInfo = new()
+        {
+            SType = StructureType.CommandBufferAllocateInfo,
+            CommandPool = _commandPool,
+            Level = CommandBufferLevel.Primary, // TODO
+            CommandBufferCount = 1, // TODO
+        };
+
+        if (_vk!.AllocateCommandBuffers(_device, &commandBufferAllocateInfo, out _commandBuffer) != Result.Success)
+            throw new Exception("Failed to allocate command buffer.");
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private unsafe void CreateSynchronizationObjects()
+    {
+        SemaphoreCreateInfo semaphoreCreateInfo = new()
+        {
+            SType = StructureType.SemaphoreCreateInfo,
+        };
+
+        FenceCreateInfo fenceCreateInfo = new()
+        {
+            SType = StructureType.FenceCreateInfo,
+            Flags = FenceCreateFlags.SignaledBit,
+        };
+
+        if (_vk!.CreateSemaphore(_device, &semaphoreCreateInfo, null, out _imageAvailableSemaphore) != Result.Success)
+            throw new Exception("Failed to create available image semaphore.");
+        if (_vk!.CreateSemaphore(_device, &semaphoreCreateInfo, null, out _frameFinishedSemaphore) != Result.Success)
+            throw new Exception("Failed to create finished frame semaphore.");
+        if (_vk!.CreateFence(_device, &fenceCreateInfo, null, out _frameInFlightFence) != Result.Success)
+            throw new Exception("Failed to create frame in flight fence.");
+    }
+
+    internal unsafe void BeginFrame()
+    {
+        _vk!.WaitForFences(_device, 1, in _frameInFlightFence, true, ulong.MaxValue);
+        _vk!.ResetFences(_device, 1, in _frameInFlightFence);
+        _khrSwapchain!.AcquireNextImage(_device, _swapChain, ulong.MaxValue, _imageAvailableSemaphore, default, ref _swapChainImageIndex);
+        _vk!.ResetCommandBuffer(_commandBuffer, CommandBufferResetFlags.None);
+
+        CommandBufferBeginInfo commandBufferBeginInfo = new()
+        {
+            SType = StructureType.CommandBufferBeginInfo,
+            Flags = CommandBufferUsageFlags.None,
+        };
+
+        if (_vk!.BeginCommandBuffer(_commandBuffer, &commandBufferBeginInfo) != Result.Success)
+            throw new Exception("Failed to begin command buffer.");
+    }
+
+    internal unsafe void EndFrame()
+    {
+        if (_vk!.EndCommandBuffer(_commandBuffer) != Result.Success)
+            throw new Exception("Failed to end command buffer.");
+
+        var waitSemaphore = _imageAvailableSemaphore;
+        var pipelineStageFlags = PipelineStageFlags.ColorAttachmentOutputBit;
+        var commandBuffer = _commandBuffer;
+        var signalSemaphore = _frameFinishedSemaphore;
+
+        SubmitInfo submitInfo = new()
+        {
+            SType = StructureType.SubmitInfo,
+            WaitSemaphoreCount = 1,
+            PWaitSemaphores = &waitSemaphore,
+            PWaitDstStageMask = &pipelineStageFlags,
+            CommandBufferCount = 1,
+            PCommandBuffers = &commandBuffer,
+            SignalSemaphoreCount = 1,
+            PSignalSemaphores = &signalSemaphore,
+        };
+
+        if (_vk!.QueueSubmit(_graphicsQueue, 1, &submitInfo, _frameInFlightFence) != Result.Success)
+            throw new Exception("Failed to submit command buffer.");
+
+        var swapChain = _swapChain;
+        fixed (uint* swapChainImageIndexPtr = &_swapChainImageIndex)
+        {
+            PresentInfoKHR presentInfoKHR = new()
+            {
+                SType = StructureType.PresentInfoKhr,
+                WaitSemaphoreCount = 1,
+                PWaitSemaphores = &signalSemaphore,
+                SwapchainCount = 1,
+                PSwapchains = &swapChain,
+                PImageIndices = swapChainImageIndexPtr,
+            };
+
+            if (_khrSwapchain!.QueuePresent(_presentationQueue, &presentInfoKHR) != Result.Success)
+                throw new Exception("Failed to present the frame to the presentation the queue.");
+        }
+    }
+
+    internal void DrainQueues()
+    {
+        _vk!.DeviceWaitIdle(_device);
+    }
+
+    // TODO
+    public unsafe void Draw()
+    {
+        BeginRenderPass();
+        _vk!.CmdDraw(_commandBuffer, 3, 1, 0, 0);
+        EndRenderPass();
+    }
+
+    private unsafe void BeginRenderPass()
+    {
+        var clearValue = stackalloc[] { new ClearValue(new ClearColorValue(0f, 1f, 0f, 1f)) };
+        RenderPassBeginInfo renderPassBeginInfo = new()
+        {
+            SType = StructureType.RenderPassBeginInfo,
+            RenderPass = _renderPass!.Handle,
+            Framebuffer = _swapChainFramebuffers![_swapChainImageIndex], // TODO
+            RenderArea = { Offset = { X = 0, Y = 0 }, Extent = _swapChainImageExtent },
+            ClearValueCount = 1, // TODO: eventually replace with 0 when render pass' LoadOp is AttachmentLoadOp.DontCare
+            PClearValues = clearValue,
+        };
+
+        _vk!.CmdBeginRenderPass(_commandBuffer, &renderPassBeginInfo, SubpassContents.Inline);
+    }
+
+    private void EndRenderPass()
+    {
+        _vk!.CmdEndRenderPass(_commandBuffer);
     }
 }
