@@ -518,7 +518,7 @@ public sealed class GraphicsContext : IDisposable
     {
         ref var surfaceFormats = ref _swapchainSupport.Formats;
         foreach (var surfaceFormat in surfaceFormats)
-            if (surfaceFormat.Format == Format.B8G8R8A8Uint && surfaceFormat.ColorSpace == ColorSpaceKHR.SpaceSrgbNonlinearKhr)
+            if (surfaceFormat.Format == Format.R8G8B8A8Unorm)
                 return surfaceFormat;
         return surfaceFormats[0];
     }
