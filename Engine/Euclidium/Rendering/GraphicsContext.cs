@@ -532,6 +532,7 @@ public sealed class GraphicsContext : IDisposable
                 return presentMode;
         return PresentModeKHR.FifoKhr; // Guaranteed to be available.
     }
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private Extent2D SelectExtent()
     {
