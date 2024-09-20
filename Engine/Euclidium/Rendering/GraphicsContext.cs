@@ -518,7 +518,7 @@ public sealed class GraphicsContext : IDisposable
     {
         ref var surfaceFormats = ref _swapchainSupport.Formats;
         foreach (var surfaceFormat in surfaceFormats)
-            if (surfaceFormat.Format == Format.B8G8R8A8Srgb && surfaceFormat.ColorSpace == ColorSpaceKHR.SpaceSrgbNonlinearKhr)
+            if (surfaceFormat.Format == Format.B8G8R8A8Uint && surfaceFormat.ColorSpace == ColorSpaceKHR.SpaceSrgbNonlinearKhr)
                 return surfaceFormat;
         return surfaceFormats[0];
     }
@@ -819,7 +819,7 @@ public sealed class GraphicsContext : IDisposable
     {
         var commandBuffer = _commandBuffers![_currentFrameInFlightIndex];
 
-        var clearValue = stackalloc[] { new ClearValue(new ClearColorValue(0f, 1f, 0f, 1f)) };
+        var clearValue = stackalloc[] { new ClearValue(new ClearColorValue(0.3f, 0.5f, 1.0f, 1.0f)) };
         RenderPassBeginInfo renderPassBeginInfo = new()
         {
             SType = StructureType.RenderPassBeginInfo,
