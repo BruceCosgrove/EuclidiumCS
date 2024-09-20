@@ -182,12 +182,13 @@ public sealed class Window
         //}
 
         RenderInit?.Invoke();
-        OnResize(_window.Size);
-        OnFramebufferResize(_window.FramebufferSize);
+        WindowResize?.Invoke(_window.Size);
+        WindowFramebufferResize?.Invoke(_window.FramebufferSize);
     }
 
     private void OnClosing()
     {
+        _graphicsContext!.WaitForDevice();
         RenderShutdown?.Invoke();
 
         //ImGui.SaveIniSettingsToDisk("./imgui.ini");
@@ -200,7 +201,6 @@ public sealed class Window
         //}
         //_imguiController!.Dispose();
 
-        _graphicsContext!.DrainQueues();
         _graphicsContext!.Dispose();
         _inputContext!.Dispose();
     }
@@ -212,23 +212,24 @@ public sealed class Window
 
     private void OnRender(double deltaTime)
     {
-        _graphicsContext!.BeginFrame();
-        Render?.Invoke(deltaTime);
+        if (_window.WindowState != WindowState.Minimized && _graphicsContext!.BeginFrame())
+        {
+            Render?.Invoke(deltaTime);
 
-        //_imguiController!.Update((float)deltaTime);
-        //ImGuiRender?.Invoke();
+            //_imguiController!.Update((float)deltaTime);
+            //ImGuiRender?.Invoke();
+            //// TODO: The ImGuiController does not do anything about cursors.
+            //unsafe
+            //{
+            //    var glfw = Glfw.GetApi();
+            //    var window = (WindowHandle*)_window.Native!.Glfw!;
+            //    var cursor = (Cursor*)_cursors![ImGui.GetMouseCursor()];
+            //    glfw.SetCursor(window, cursor);
+            //}
+            //_imguiController!.Render();
 
-        //// TODO: The ImGuiController does not do anything about cursors.
-        //unsafe
-        //{
-        //    var glfw = Glfw.GetApi();
-        //    var window = (WindowHandle*)_window.Native!.Glfw!;
-        //    var cursor = (Cursor*)_cursors![ImGui.GetMouseCursor()];
-        //    glfw.SetCursor(window, cursor);
-        //}
-
-        //_imguiController!.Render();
-        _graphicsContext!.EndFrame();
+            _graphicsContext!.EndFrame();
+        }
     }
 
     private void OnResize(Vector2D<int> size) =>

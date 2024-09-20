@@ -1,7 +1,13 @@
+// Allow for release builds to have the debug messenger.
+// TODO: this is a terrible solution.
+#if DEBUG // || true
+#define ENABLE_DEBUG_MESSENGER
+#endif
+
 using Silk.NET.Core.Native;
 using Silk.NET.Core;
 using Silk.NET.Vulkan;
-#if DEBUG
+#if ENABLE_DEBUG_MESSENGER
 using Silk.NET.Vulkan.Extensions.EXT;
 #endif
 using Silk.NET.Vulkan.Extensions.KHR;
@@ -30,7 +36,7 @@ public sealed class GraphicsContext : IDisposable
 
     private static readonly string[] s_requiredInstanceLayers =
     [
-#if DEBUG
+#if ENABLE_DEBUG_MESSENGER
         "VK_LAYER_KHRONOS_validation",
 #endif
     ];
@@ -44,7 +50,7 @@ public sealed class GraphicsContext : IDisposable
 
     private Vk? _vk;
     private Instance _instance;
-#if DEBUG
+#if ENABLE_DEBUG_MESSENGER
     private ExtDebugUtils? _debugUtils;
     private DebugUtilsMessengerEXT _debugMessenger;
 #endif
@@ -90,7 +96,7 @@ public sealed class GraphicsContext : IDisposable
         // need to be declared before the try block.
         var surfaceExtensions = window.VkSurface!.GetRequiredExtensions(out uint surfaceExtensionCount);
         var instanceExtensions = SilkMarshal.PtrToStringArray((nint)surfaceExtensions, (int)surfaceExtensionCount);
-#if DEBUG
+#if ENABLE_DEBUG_MESSENGER
         instanceExtensions = [..instanceExtensions, ExtDebugUtils.ExtensionName];
 #endif
 
@@ -99,7 +105,7 @@ public sealed class GraphicsContext : IDisposable
         var engineName = (byte*)SilkMarshal.StringToPtr("Euclidium");
         var instanceExtensionNames = (byte**)SilkMarshal.StringArrayToPtr(instanceExtensions);
         var deviceExtensionNames = (byte**)SilkMarshal.StringArrayToPtr(s_requiredDeviceExtensions);
-#if DEBUG
+#if ENABLE_DEBUG_MESSENGER
         var layerNames = (byte**)SilkMarshal.StringArrayToPtr(s_requiredInstanceLayers);
 #endif
 
@@ -107,7 +113,7 @@ public sealed class GraphicsContext : IDisposable
         {
             CreateAPI(window);
             CreateInstance(applicationName, engineName, instanceExtensions.Length, instanceExtensionNames
-#if DEBUG
+#if ENABLE_DEBUG_MESSENGER
                 , layerNames
 #endif
             );
@@ -115,7 +121,7 @@ public sealed class GraphicsContext : IDisposable
 
             SelectPhysicalDevice();
             CreateDevice(deviceExtensionNames
-#if DEBUG
+#if ENABLE_DEBUG_MESSENGER
                 , layerNames
 #endif
             );
@@ -137,7 +143,7 @@ public sealed class GraphicsContext : IDisposable
         finally
         {
             // Deallocate all the unmanaged objects, regardless of exceptions.
-#if DEBUG
+#if ENABLE_DEBUG_MESSENGER
             SilkMarshal.Free((nint)layerNames);
 #endif
             SilkMarshal.Free((nint)deviceExtensionNames);
@@ -161,7 +167,7 @@ public sealed class GraphicsContext : IDisposable
         DisposeHelper.Dispose(ref _device, handle => _vk!.DestroyDevice(handle, null));
         DisposeHelper.Dispose(ref _surface, handle => _khrSurface!.DestroySurface(_instance, handle, null));
         DisposeHelper.Dispose(ref _khrSurface);
-#if DEBUG
+#if ENABLE_DEBUG_MESSENGER
         DisposeHelper.Dispose(ref _debugMessenger, handle => _debugUtils!.DestroyDebugUtilsMessenger(_instance, handle, null));
         DisposeHelper.Dispose(ref _debugUtils);
 #endif
@@ -191,7 +197,7 @@ public sealed class GraphicsContext : IDisposable
     ,   byte* engineName
     ,   int instanceExtensionCount
     ,   byte** instanceExtensionNames
-#if DEBUG
+#if ENABLE_DEBUG_MESSENGER
     ,   byte** layerNames
 #endif
     ) {
@@ -217,7 +223,7 @@ public sealed class GraphicsContext : IDisposable
             ApiVersion = Vk.Version13,
         };
 
-#if DEBUG
+#if ENABLE_DEBUG_MESSENGER
         DebugUtilsMessengerCreateInfoEXT debugUtilsMessengerCreateInfoEXT = new()
         {
             SType = StructureType.DebugUtilsMessengerCreateInfoExt,
@@ -241,7 +247,7 @@ public sealed class GraphicsContext : IDisposable
             PApplicationInfo = &applicationInfo,
             EnabledExtensionCount = (uint)instanceExtensionCount,
             PpEnabledExtensionNames = instanceExtensionNames,
-#if DEBUG
+#if ENABLE_DEBUG_MESSENGER
             EnabledLayerCount = (uint)s_requiredInstanceLayers.Length,
             PpEnabledLayerNames = layerNames,
             PNext = &debugUtilsMessengerCreateInfoEXT,
@@ -256,7 +262,7 @@ public sealed class GraphicsContext : IDisposable
         // Finish creating debug messenger.
         // TODO: IDK why, but the above "PNext = &debugUtilsMessengerCreateInfoEXT,"
         // is sufficient and required to create the messenger, so this seems useless.
-#if DEBUG
+#if ENABLE_DEBUG_MESSENGER
         if (!_vk.TryGetInstanceExtension(_instance, out _debugUtils))
             throw new Exception("Failed to get the debug util extension.");
 
@@ -265,7 +271,7 @@ public sealed class GraphicsContext : IDisposable
 #endif
     }
 
-#if DEBUG
+#if ENABLE_DEBUG_MESSENGER
     private unsafe uint DebugMessageCallback(
         DebugUtilsMessageSeverityFlagsEXT messageSeverity,
         DebugUtilsMessageTypeFlagsEXT messageTypes,
@@ -396,7 +402,7 @@ public sealed class GraphicsContext : IDisposable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private unsafe void CreateDevice
     (   byte** deviceExtensionNames
-#if DEBUG
+#if ENABLE_DEBUG_MESSENGER
     ,   byte** layerNames
 #endif
     ) {
@@ -429,7 +435,7 @@ public sealed class GraphicsContext : IDisposable
                 EnabledExtensionCount = (uint)s_requiredDeviceExtensions.Length,
                 PpEnabledExtensionNames = deviceExtensionNames,
                 PEnabledFeatures = &physicalDeviceFeatures,
-#if DEBUG
+#if ENABLE_DEBUG_MESSENGER
                 EnabledLayerCount = (uint)s_requiredInstanceLayers.Length,
                 PpEnabledLayerNames = layerNames,
 #endif

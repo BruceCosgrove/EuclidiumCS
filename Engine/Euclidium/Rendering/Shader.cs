@@ -63,7 +63,7 @@ public sealed class Shader : IDisposable
         var context = Engine.Instance.Window.Context;
         var vk = context.VK;
         var commandBuffer = context.CommandBuffer;
-        var extent = context.SwapChainImageExtent;
+        var extent = context.SwapchainImageExtent;
 
         vk.CmdBindPipeline(commandBuffer, PipelineBindPoint.Graphics, _pipeline);
 
