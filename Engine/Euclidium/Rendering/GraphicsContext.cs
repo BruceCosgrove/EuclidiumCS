@@ -40,6 +40,8 @@ public sealed class GraphicsContext : IDisposable
         KhrSwapchain.ExtensionName,
     ];
 
+    private const uint FramesInFlight = 2;
+
     private Vk? _vk;
     private Instance _instance;
 #if DEBUG
@@ -61,12 +63,13 @@ public sealed class GraphicsContext : IDisposable
     private RenderPass? _renderPass;
     private Silk.NET.Vulkan.Framebuffer[]? _swapChainFramebuffers;
     private CommandPool _commandPool;
-    private CommandBuffer _commandBuffer;
-    private Silk.NET.Vulkan.Semaphore _imageAvailableSemaphore;
-    private Silk.NET.Vulkan.Semaphore _frameFinishedSemaphore;
-    private Fence _frameInFlightFence;
+    private CommandBuffer[]? _commandBuffers;
+    private Silk.NET.Vulkan.Semaphore[]? _imageAvailableSemaphores;
+    private Silk.NET.Vulkan.Semaphore[]? _frameFinishedSemaphores;
+    private Fence[]? _frameInFlightFences;
 
     private uint _swapChainImageIndex;
+    private uint _currentFrameInFlight;
 
     public Vk VK => _vk!;
     public Instance Instance => _instance!;
@@ -74,7 +77,7 @@ public sealed class GraphicsContext : IDisposable
     public Format SwapChainImageFormat => _swapChainImageFormat!;
     public Extent2D SwapChainImageExtent => _swapChainImageExtent!;
     public RenderPass RenderPass => _renderPass!;
-    public CommandBuffer CommandBuffer => _commandBuffer!;
+    public CommandBuffer CommandBuffer => _commandBuffers![_currentFrameInFlight];
 
     public unsafe void Create(IWindow window)
     {
@@ -121,7 +124,7 @@ public sealed class GraphicsContext : IDisposable
             CreateRenderPass();
             CreateSwapChainFramebuffers();
             CreateCommandPool(ref queueFamilySupport);
-            CreateCommandBuffer();
+            CreateCommandBuffers();
             CreateSynchronizationObjects();
         }
         catch
@@ -146,9 +149,9 @@ public sealed class GraphicsContext : IDisposable
     // This even works if it was only partially created or already partially or entirely disposed.
     public unsafe void Dispose()
     {
-        DisposeHelper.Dispose(ref _frameInFlightFence, handle => _vk!.DestroyFence(_device, handle, null));
-        DisposeHelper.Dispose(ref _frameFinishedSemaphore, handle => _vk!.DestroySemaphore(_device, handle, null));
-        DisposeHelper.Dispose(ref _imageAvailableSemaphore, handle => _vk!.DestroySemaphore(_device, handle, null));
+        DisposeHelper.Dispose(ref _frameInFlightFences, handle => _vk!.DestroyFence(_device, handle, null));
+        DisposeHelper.Dispose(ref _frameFinishedSemaphores, handle => _vk!.DestroySemaphore(_device, handle, null));
+        DisposeHelper.Dispose(ref _imageAvailableSemaphores, handle => _vk!.DestroySemaphore(_device, handle, null));
         DisposeHelper.Dispose(ref _commandPool, handle => _vk!.DestroyCommandPool(_device, handle, null));
         DisposeHelper.Dispose(ref _swapChainFramebuffers, handle => _vk!.DestroyFramebuffer(_device, handle, null));
         DisposeHelper.Dispose(ref _swapChainImageViews, handle => _vk!.DestroyImageView(_device, handle, null));
@@ -638,23 +641,32 @@ public sealed class GraphicsContext : IDisposable
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private unsafe void CreateCommandBuffer()
+    private unsafe void CreateCommandBuffers()
     {
+        _commandBuffers = new CommandBuffer[FramesInFlight];
+
         CommandBufferAllocateInfo commandBufferAllocateInfo = new()
         {
             SType = StructureType.CommandBufferAllocateInfo,
             CommandPool = _commandPool,
             Level = CommandBufferLevel.Primary, // TODO
-            CommandBufferCount = 1, // TODO
+            CommandBufferCount = FramesInFlight,
         };
 
-        if (_vk!.AllocateCommandBuffers(_device, &commandBufferAllocateInfo, out _commandBuffer) != Result.Success)
-            throw new Exception("Failed to allocate command buffer.");
+        fixed (CommandBuffer* commandBuffersPtr = _commandBuffers)
+        {
+            if (_vk!.AllocateCommandBuffers(_device, &commandBufferAllocateInfo, commandBuffersPtr) != Result.Success)
+                throw new Exception("Failed to allocate command buffers.");
+        }
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private unsafe void CreateSynchronizationObjects()
     {
+        _imageAvailableSemaphores = new Silk.NET.Vulkan.Semaphore[FramesInFlight];
+        _frameFinishedSemaphores = new Silk.NET.Vulkan.Semaphore[FramesInFlight];
+        _frameInFlightFences = new Fence[FramesInFlight];
+
         SemaphoreCreateInfo semaphoreCreateInfo = new()
         {
             SType = StructureType.SemaphoreCreateInfo,
@@ -666,20 +678,27 @@ public sealed class GraphicsContext : IDisposable
             Flags = FenceCreateFlags.SignaledBit,
         };
 
-        if (_vk!.CreateSemaphore(_device, &semaphoreCreateInfo, null, out _imageAvailableSemaphore) != Result.Success)
-            throw new Exception("Failed to create available image semaphore.");
-        if (_vk!.CreateSemaphore(_device, &semaphoreCreateInfo, null, out _frameFinishedSemaphore) != Result.Success)
-            throw new Exception("Failed to create finished frame semaphore.");
-        if (_vk!.CreateFence(_device, &fenceCreateInfo, null, out _frameInFlightFence) != Result.Success)
-            throw new Exception("Failed to create frame in flight fence.");
+        for (uint i = 0; i < FramesInFlight; ++i)
+        {
+            if (_vk!.CreateSemaphore(_device, &semaphoreCreateInfo, null, out _imageAvailableSemaphores[i]) != Result.Success)
+                throw new Exception("Failed to create available image semaphore.");
+            if (_vk!.CreateSemaphore(_device, &semaphoreCreateInfo, null, out _frameFinishedSemaphores[i]) != Result.Success)
+                throw new Exception("Failed to create finished frame semaphore.");
+            if (_vk!.CreateFence(_device, &fenceCreateInfo, null, out _frameInFlightFences[i]) != Result.Success)
+                throw new Exception("Failed to create frame in flight fence.");
+        }
     }
 
     internal unsafe void BeginFrame()
     {
-        _vk!.WaitForFences(_device, 1, in _frameInFlightFence, true, ulong.MaxValue);
-        _vk!.ResetFences(_device, 1, in _frameInFlightFence);
-        _khrSwapchain!.AcquireNextImage(_device, _swapChain, ulong.MaxValue, _imageAvailableSemaphore, default, ref _swapChainImageIndex);
-        _vk!.ResetCommandBuffer(_commandBuffer, CommandBufferResetFlags.None);
+        var commandBuffer = _commandBuffers![_currentFrameInFlight];
+        var imageAvailableSemaphore = _imageAvailableSemaphores![_currentFrameInFlight];
+        var frameInFlightFence = _frameInFlightFences![_currentFrameInFlight];
+
+        _vk!.WaitForFences(_device, 1, &frameInFlightFence, true, ulong.MaxValue);
+        _vk!.ResetFences(_device, 1, &frameInFlightFence);
+        _khrSwapchain!.AcquireNextImage(_device, _swapChain, ulong.MaxValue, imageAvailableSemaphore, default, ref _swapChainImageIndex);
+        _vk!.ResetCommandBuffer(commandBuffer, CommandBufferResetFlags.None);
 
         CommandBufferBeginInfo commandBufferBeginInfo = new()
         {
@@ -687,51 +706,52 @@ public sealed class GraphicsContext : IDisposable
             Flags = CommandBufferUsageFlags.None,
         };
 
-        if (_vk!.BeginCommandBuffer(_commandBuffer, &commandBufferBeginInfo) != Result.Success)
+        if (_vk!.BeginCommandBuffer(commandBuffer, &commandBufferBeginInfo) != Result.Success)
             throw new Exception("Failed to begin command buffer.");
     }
 
     internal unsafe void EndFrame()
     {
-        if (_vk!.EndCommandBuffer(_commandBuffer) != Result.Success)
+        var commandBuffer = _commandBuffers![_currentFrameInFlight];
+        var imageAvailableSemaphore = _imageAvailableSemaphores![_currentFrameInFlight];
+        var frameFinishedSemaphore = _frameFinishedSemaphores![_currentFrameInFlight];
+        var frameInFlightFence = _frameInFlightFences![_currentFrameInFlight];
+
+        if (_vk!.EndCommandBuffer(commandBuffer) != Result.Success)
             throw new Exception("Failed to end command buffer.");
 
-        var waitSemaphore = _imageAvailableSemaphore;
         var pipelineStageFlags = PipelineStageFlags.ColorAttachmentOutputBit;
-        var commandBuffer = _commandBuffer;
-        var signalSemaphore = _frameFinishedSemaphore;
-
         SubmitInfo submitInfo = new()
         {
             SType = StructureType.SubmitInfo,
             WaitSemaphoreCount = 1,
-            PWaitSemaphores = &waitSemaphore,
+            PWaitSemaphores = &imageAvailableSemaphore,
             PWaitDstStageMask = &pipelineStageFlags,
             CommandBufferCount = 1,
             PCommandBuffers = &commandBuffer,
             SignalSemaphoreCount = 1,
-            PSignalSemaphores = &signalSemaphore,
+            PSignalSemaphores = &frameFinishedSemaphore,
         };
 
-        if (_vk!.QueueSubmit(_graphicsQueue, 1, &submitInfo, _frameInFlightFence) != Result.Success)
+        if (_vk!.QueueSubmit(_graphicsQueue, 1, &submitInfo, frameInFlightFence) != Result.Success)
             throw new Exception("Failed to submit command buffer.");
 
         var swapChain = _swapChain;
-        fixed (uint* swapChainImageIndexPtr = &_swapChainImageIndex)
+        var swapChainImageIndex = _swapChainImageIndex;
+        PresentInfoKHR presentInfoKHR = new()
         {
-            PresentInfoKHR presentInfoKHR = new()
-            {
-                SType = StructureType.PresentInfoKhr,
-                WaitSemaphoreCount = 1,
-                PWaitSemaphores = &signalSemaphore,
-                SwapchainCount = 1,
-                PSwapchains = &swapChain,
-                PImageIndices = swapChainImageIndexPtr,
-            };
+            SType = StructureType.PresentInfoKhr,
+            WaitSemaphoreCount = 1,
+            PWaitSemaphores = &frameFinishedSemaphore,
+            SwapchainCount = 1,
+            PSwapchains = &swapChain,
+            PImageIndices = &swapChainImageIndex,
+        };
 
-            if (_khrSwapchain!.QueuePresent(_presentationQueue, &presentInfoKHR) != Result.Success)
-                throw new Exception("Failed to present the frame to the presentation the queue.");
-        }
+        if (_khrSwapchain!.QueuePresent(_presentationQueue, &presentInfoKHR) != Result.Success)
+            throw new Exception("Failed to present the frame to the presentation the queue.");
+
+        _currentFrameInFlight = (_currentFrameInFlight + 1) % FramesInFlight;
     }
 
     internal void DrainQueues()
@@ -742,13 +762,18 @@ public sealed class GraphicsContext : IDisposable
     // TODO
     public unsafe void Draw()
     {
+        var commandBuffer = _commandBuffers![_currentFrameInFlight];
+
         BeginRenderPass();
-        _vk!.CmdDraw(_commandBuffer, 3, 1, 0, 0);
+        _vk!.CmdDraw(commandBuffer, 3, 1, 0, 0);
         EndRenderPass();
     }
 
+    // TODO
     private unsafe void BeginRenderPass()
     {
+        var commandBuffer = _commandBuffers![_currentFrameInFlight];
+
         var clearValue = stackalloc[] { new ClearValue(new ClearColorValue(0f, 1f, 0f, 1f)) };
         RenderPassBeginInfo renderPassBeginInfo = new()
         {
@@ -760,11 +785,14 @@ public sealed class GraphicsContext : IDisposable
             PClearValues = clearValue,
         };
 
-        _vk!.CmdBeginRenderPass(_commandBuffer, &renderPassBeginInfo, SubpassContents.Inline);
+        _vk!.CmdBeginRenderPass(commandBuffer, &renderPassBeginInfo, SubpassContents.Inline);
     }
 
+    // TODO
     private void EndRenderPass()
     {
-        _vk!.CmdEndRenderPass(_commandBuffer);
+        var commandBuffer = _commandBuffers![_currentFrameInFlight];
+
+        _vk!.CmdEndRenderPass(commandBuffer);
     }
 }
