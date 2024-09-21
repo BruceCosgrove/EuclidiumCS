@@ -77,6 +77,7 @@ public sealed class GraphicsContext : IDisposable
 
     public Vk VK => _vk!;
     public Instance Instance => _instance!;
+    public PhysicalDevice PhysicalDevice => _physicalDevice!;
     public Device Device => _device!;
     public Extent2D SwapchainImageExtent => _swapchainImageExtent!;
     public RenderPass RenderPass => _renderPass!;
@@ -151,29 +152,29 @@ public sealed class GraphicsContext : IDisposable
     // This even works if it was only partially created or already partially or entirely disposed.
     public unsafe void Dispose()
     {
-        DisposeHelper.Dispose(ref _frameInFlightFences, handle => _vk!.DestroyFence(_device, handle, null));
-        DisposeHelper.Dispose(ref _frameFinishedSemaphores, handle => _vk!.DestroySemaphore(_device, handle, null));
-        DisposeHelper.Dispose(ref _imageAvailableSemaphores, handle => _vk!.DestroySemaphore(_device, handle, null));
-        DisposeHelper.Dispose(ref _commandPool, handle => _vk!.DestroyCommandPool(_device, handle, null));
+        RenderHelper.Dispose(ref _frameInFlightFences, handle => _vk!.DestroyFence(_device, handle, null));
+        RenderHelper.Dispose(ref _frameFinishedSemaphores, handle => _vk!.DestroySemaphore(_device, handle, null));
+        RenderHelper.Dispose(ref _imageAvailableSemaphores, handle => _vk!.DestroySemaphore(_device, handle, null));
+        RenderHelper.Dispose(ref _commandPool, handle => _vk!.DestroyCommandPool(_device, handle, null));
         DisposeSwapchain();
-        DisposeHelper.Dispose(ref _khrSwapchain); // Don't dispose the extension API with the swapchain.
-        DisposeHelper.Dispose(ref _renderPass);
-        DisposeHelper.Dispose(ref _device, handle => _vk!.DestroyDevice(handle, null));
-        DisposeHelper.Dispose(ref _surface, handle => _khrSurface!.DestroySurface(_instance, handle, null));
-        DisposeHelper.Dispose(ref _khrSurface);
+        RenderHelper.Dispose(ref _khrSwapchain); // Don't dispose the extension API with the swapchain.
+        RenderHelper.Dispose(ref _renderPass);
+        RenderHelper.Dispose(ref _device, handle => _vk!.DestroyDevice(handle, null));
+        RenderHelper.Dispose(ref _surface, handle => _khrSurface!.DestroySurface(_instance, handle, null));
+        RenderHelper.Dispose(ref _khrSurface);
 #if DEBUG
-        DisposeHelper.Dispose(ref _debugMessenger, handle => _debugUtils!.DestroyDebugUtilsMessenger(_instance, handle, null));
-        DisposeHelper.Dispose(ref _debugUtils);
+        RenderHelper.Dispose(ref _debugMessenger, handle => _debugUtils!.DestroyDebugUtilsMessenger(_instance, handle, null));
+        RenderHelper.Dispose(ref _debugUtils);
 #endif
-        DisposeHelper.Dispose(ref _instance, handle => _vk!.DestroyInstance(handle, null));
-        DisposeHelper.Dispose(ref _vk);
+        RenderHelper.Dispose(ref _instance, handle => _vk!.DestroyInstance(handle, null));
+        RenderHelper.Dispose(ref _vk);
     }
 
     private unsafe void DisposeSwapchain()
     {
-        DisposeHelper.Dispose(ref _swapchainFramebuffers, handle => _vk!.DestroyFramebuffer(_device, handle, null));
-        DisposeHelper.Dispose(ref _swapchainImageViews, handle => _vk!.DestroyImageView(_device, handle, null));
-        DisposeHelper.Dispose(ref _swapchain, handle => _khrSwapchain!.DestroySwapchain(_device, handle, null));
+        RenderHelper.Dispose(ref _swapchainFramebuffers, handle => _vk!.DestroyFramebuffer(_device, handle, null));
+        RenderHelper.Dispose(ref _swapchainImageViews, handle => _vk!.DestroyImageView(_device, handle, null));
+        RenderHelper.Dispose(ref _swapchain, handle => _khrSwapchain!.DestroySwapchain(_device, handle, null));
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -250,18 +251,24 @@ public sealed class GraphicsContext : IDisposable
 #endif
         };
 
-        if (_vk!.CreateInstance(&instanceCreateInfo, null, out _instance) != Result.Success)
-            throw new Exception("Failed to create instance.");
+        RenderHelper.Require(
+            _vk!.CreateInstance(&instanceCreateInfo, null, out _instance),
+            "Failed to create instance."
+        );
 
         // Finish creating debug messenger.
         // TODO: IDK why, but the above "PNext = &debugUtilsMessengerCreateInfoEXT,"
         // is sufficient and required to create the messenger, so this seems useless.
 #if DEBUG
-        if (!_vk.TryGetInstanceExtension(_instance, out _debugUtils))
-            throw new Exception("Failed to get the debug util extension.");
+        RenderHelper.Require(
+            _vk.TryGetInstanceExtension(_instance, out _debugUtils),
+            "Failed to get the debug util extension."
+        );
 
-        if (_debugUtils!.CreateDebugUtilsMessenger(_instance, &debugUtilsMessengerCreateInfoEXT, null, out _debugMessenger) != Result.Success)
-            throw new Exception("Failed to create debug messenger.");
+        RenderHelper.Require(
+            _debugUtils!.CreateDebugUtilsMessenger(_instance, &debugUtilsMessengerCreateInfoEXT, null, out _debugMessenger),
+            "Failed to create debug messenger."
+        );
 #endif
     }
 
@@ -296,8 +303,10 @@ public sealed class GraphicsContext : IDisposable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private unsafe void CreateSurface(IWindow window)
     {
-        if (!_vk!.TryGetInstanceExtension(_instance, out _khrSurface))
-            throw new Exception("Failed to get the surface extension.");
+        RenderHelper.Require(
+            _vk!.TryGetInstanceExtension(_instance, out _khrSurface),
+            "Failed to get the surface extension."
+        );
 
         _surface = window.VkSurface!.Create<AllocationCallbacks>(_instance.ToHandle(), null).ToSurface();
     }
@@ -316,8 +325,7 @@ public sealed class GraphicsContext : IDisposable
             }
         }
 
-        if (_physicalDevice.Handle == 0)
-            throw new Exception("No suitable physical device found.");
+        RenderHelper.Require(_physicalDevice.Handle != 0, "No suitable physical device found.");
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -326,9 +334,9 @@ public sealed class GraphicsContext : IDisposable
         // Check if the device has the required extensions.
 
         uint extensionCount = 0;
-        _vk!.EnumerateDeviceExtensionProperties(physicalDevice, (byte*)null, &extensionCount, null);
+        RenderHelper.Require(_vk!.EnumerateDeviceExtensionProperties(physicalDevice, (byte*)null, &extensionCount, null));
         var extensions = new ExtensionProperties[extensionCount];
-        _vk!.EnumerateDeviceExtensionProperties(physicalDevice, (byte*)null, &extensionCount, extensions);
+        RenderHelper.Require(_vk!.EnumerateDeviceExtensionProperties(physicalDevice, (byte*)null, &extensionCount, extensions));
 
         var extensionNames = extensions.Select(extension => Marshal.PtrToStringAnsi((nint)extension.ExtensionName));
         if (!s_requiredDeviceExtensions.All(extensionNames.Contains))
@@ -357,7 +365,9 @@ public sealed class GraphicsContext : IDisposable
             if (queueFamily.QueueFlags.HasFlag(QueueFlags.GraphicsBit))
                 queueFamilySupport.GraphicsFamily = i;
 
-            _khrSurface!.GetPhysicalDeviceSurfaceSupport(physicalDevice, i, _surface, out var presentationSupport);
+            RenderHelper.Require(
+                _khrSurface!.GetPhysicalDeviceSurfaceSupport(physicalDevice, i, _surface, out var presentationSupport)
+            );
             if (presentationSupport)
                 queueFamilySupport.PresentFamily = i;
         }
@@ -376,18 +386,24 @@ public sealed class GraphicsContext : IDisposable
     {
         SwapChainSupport swapChainSupport = new();
 
-        _khrSurface!.GetPhysicalDeviceSurfaceCapabilities(physicalDevice, _surface, out swapChainSupport.Capabilities);
+        RenderHelper.Require(
+            _khrSurface!.GetPhysicalDeviceSurfaceCapabilities(physicalDevice, _surface, out swapChainSupport.Capabilities)
+        );
 
         uint formatCount = 0;
-        _khrSurface!.GetPhysicalDeviceSurfaceFormats(physicalDevice, _surface, &formatCount, null);
+        RenderHelper.Require(_khrSurface!.GetPhysicalDeviceSurfaceFormats(physicalDevice, _surface, &formatCount, null));
         var formats = new SurfaceFormatKHR[formatCount];
-        _khrSurface!.GetPhysicalDeviceSurfaceFormats(physicalDevice, _surface, &formatCount, formats);
+        RenderHelper.Require(_khrSurface!.GetPhysicalDeviceSurfaceFormats(physicalDevice, _surface, &formatCount, formats));
         swapChainSupport.Formats = formats;
 
         uint presentModeCount = 0;
-        _khrSurface!.GetPhysicalDeviceSurfacePresentModes(physicalDevice, _surface, &presentModeCount, null);
+        RenderHelper.Require(
+            _khrSurface!.GetPhysicalDeviceSurfacePresentModes(physicalDevice, _surface, &presentModeCount, null)
+        );
         var presentModes = new PresentModeKHR[presentModeCount];
-        _khrSurface!.GetPhysicalDeviceSurfacePresentModes(physicalDevice, _surface, &presentModeCount, presentModes);
+        RenderHelper.Require(
+            _khrSurface!.GetPhysicalDeviceSurfacePresentModes(physicalDevice, _surface, &presentModeCount, presentModes)
+        );
         swapChainSupport.PresentModes = presentModes;
 
         return swapChainSupport;
@@ -435,8 +451,10 @@ public sealed class GraphicsContext : IDisposable
 #endif
             };
 
-            if (_vk!.CreateDevice(_physicalDevice, &deviceCreateInfo, null, out _device) != Result.Success)
-                throw new Exception("Failed to create device");
+            RenderHelper.Require(
+                _vk!.CreateDevice(_physicalDevice, &deviceCreateInfo, null, out _device),
+                "Failed to create device"
+            );
         }
 
         _vk!.GetDeviceQueue(_device, graphicsFamily, 0, out _graphicsQueue);
@@ -480,25 +498,28 @@ public sealed class GraphicsContext : IDisposable
             swapchainCreateInfo.PQueueFamilyIndices = queueFamilyIndices;
         }
 
-        if (_khrSwapchain == null && !_vk!.TryGetDeviceExtension(_instance, _device, out _khrSwapchain))
-            throw new Exception("Failed to get the swap chain extension.");
+        RenderHelper.Require(
+            _khrSwapchain != null || _vk!.TryGetDeviceExtension(_instance, _device, out _khrSwapchain),
+            "Failed to get the swap chain extension."
+        );
 
         // When recreating the swapchain, we must wait for the device to be available.
         if (_swapchain.Handle != 0)
             _vk!.DeviceWaitIdle(_device);
 
         SwapchainKHR swapChain;
-        var result = _khrSwapchain!.CreateSwapchain(_device, &swapchainCreateInfo, null, &swapChain);
-        if (result != Result.Success)
-            throw new Exception("Failed to create swapchain.");
+        RenderHelper.Require(
+            _khrSwapchain!.CreateSwapchain(_device, &swapchainCreateInfo, null, &swapChain),
+            "Failed to create swapchain."
+        );
 
         DisposeSwapchain();
         _swapchain = swapChain;
 
         uint actualImageCount;
-        _khrSwapchain!.GetSwapchainImages(_device, _swapchain, &actualImageCount, null);
+        RenderHelper.Require(_khrSwapchain!.GetSwapchainImages(_device, _swapchain, &actualImageCount, null));
         var images = new Image[actualImageCount];
-        _khrSwapchain!.GetSwapchainImages(_device, _swapchain, &actualImageCount, images);
+        RenderHelper.Require(_khrSwapchain!.GetSwapchainImages(_device, _swapchain, &actualImageCount, images));
         _swapchainImages = images;
         _swapchainImageCount = actualImageCount;
 
@@ -579,8 +600,10 @@ public sealed class GraphicsContext : IDisposable
         for (uint i = 0; i < _swapchainImages.Length; ++i)
         {
             imageViewCreateInfo.Image = _swapchainImages[i];
-            if (_vk!.CreateImageView(_device, &imageViewCreateInfo, null, out _swapchainImageViews[i]) != Result.Success)
-                throw new Exception("Failed to create image view.");
+            RenderHelper.Require(
+                _vk!.CreateImageView(_device, &imageViewCreateInfo, null, out _swapchainImageViews[i]),
+                "Failed to create image view."
+            );
         }
     }
 
@@ -645,8 +668,10 @@ public sealed class GraphicsContext : IDisposable
                 Layers = 1, // TODO
             };
 
-            if (_vk!.CreateFramebuffer(_device, &framebufferCreateInfo, null, out _swapchainFramebuffers[i]) != Result.Success)
-                throw new Exception("Failed to create swap chain framebuffer.");
+            RenderHelper.Require(
+                _vk!.CreateFramebuffer(_device, &framebufferCreateInfo, null, out _swapchainFramebuffers[i]),
+                "Failed to create swap chain framebuffer."
+            );
         }
     }
 
@@ -662,8 +687,10 @@ public sealed class GraphicsContext : IDisposable
             QueueFamilyIndex = graphicsFamily,
         };
 
-        if (_vk!.CreateCommandPool(_device, &commandPoolCreateInfo, null, out _commandPool) != Result.Success)
-            throw new Exception("Failed to create command pool.");
+        RenderHelper.Require(
+            _vk!.CreateCommandPool(_device, &commandPoolCreateInfo, null, out _commandPool),
+            "Failed to create command pool."
+        );
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -681,8 +708,10 @@ public sealed class GraphicsContext : IDisposable
 
         fixed (CommandBuffer* commandBuffersPtr = _commandBuffers)
         {
-            if (_vk!.AllocateCommandBuffers(_device, &commandBufferAllocateInfo, commandBuffersPtr) != Result.Success)
-                throw new Exception("Failed to allocate command buffers.");
+            RenderHelper.Require(
+                _vk!.AllocateCommandBuffers(_device, &commandBufferAllocateInfo, commandBuffersPtr),
+                "Failed to allocate command buffers."
+            );
         }
     }
 
@@ -706,12 +735,18 @@ public sealed class GraphicsContext : IDisposable
 
         for (uint i = 0; i < FramesInFlight; ++i)
         {
-            if (_vk!.CreateSemaphore(_device, &semaphoreCreateInfo, null, out _imageAvailableSemaphores[i]) != Result.Success)
-                throw new Exception("Failed to create available image semaphore.");
-            if (_vk!.CreateSemaphore(_device, &semaphoreCreateInfo, null, out _frameFinishedSemaphores[i]) != Result.Success)
-                throw new Exception("Failed to create finished frame semaphore.");
-            if (_vk!.CreateFence(_device, &fenceCreateInfo, null, out _frameInFlightFences[i]) != Result.Success)
-                throw new Exception("Failed to create frame in flight fence.");
+            RenderHelper.Require(
+                _vk!.CreateSemaphore(_device, &semaphoreCreateInfo, null, out _imageAvailableSemaphores[i]),
+                "Failed to create available image semaphore."
+            );
+            RenderHelper.Require(
+                _vk!.CreateSemaphore(_device, &semaphoreCreateInfo, null, out _frameFinishedSemaphores[i]),
+                "Failed to create finished frame semaphore."
+            );
+            RenderHelper.Require(
+                _vk!.CreateFence(_device, &fenceCreateInfo, null, out _frameInFlightFences[i]),
+                "Failed to create frame in flight fence."
+            );
         }
     }
 
@@ -721,7 +756,7 @@ public sealed class GraphicsContext : IDisposable
         var imageAvailableSemaphore = _imageAvailableSemaphores![_currentFrameInFlightIndex];
         var frameInFlightFence = _frameInFlightFences![_currentFrameInFlightIndex];
 
-        _vk!.WaitForFences(_device, 1, &frameInFlightFence, true, ulong.MaxValue);
+        RenderHelper.Require(_vk!.WaitForFences(_device, 1, &frameInFlightFence, true, ulong.MaxValue));
         var result = _khrSwapchain!.AcquireNextImage(_device, _swapchain, ulong.MaxValue, imageAvailableSemaphore, default, ref _swapchainImageIndex);
 
         if (result == Result.ErrorOutOfDateKhr || result == Result.SuboptimalKhr)
@@ -729,10 +764,12 @@ public sealed class GraphicsContext : IDisposable
             RecreateSwapchain();
             return false;
         }
+        else
+            RenderHelper.Require(result);
 
-        _vk!.ResetFences(_device, 1, &frameInFlightFence);
+        RenderHelper.Require(_vk!.ResetFences(_device, 1, &frameInFlightFence));
 
-        _vk!.ResetCommandBuffer(commandBuffer, CommandBufferResetFlags.None);
+        RenderHelper.Require(_vk!.ResetCommandBuffer(commandBuffer, CommandBufferResetFlags.None));
 
         CommandBufferBeginInfo commandBufferBeginInfo = new()
         {
@@ -740,8 +777,10 @@ public sealed class GraphicsContext : IDisposable
             Flags = CommandBufferUsageFlags.None, // TODO
         };
 
-        if (_vk!.BeginCommandBuffer(commandBuffer, &commandBufferBeginInfo) != Result.Success)
-            throw new Exception("Failed to begin command buffer.");
+        RenderHelper.Require(
+            _vk!.BeginCommandBuffer(commandBuffer, &commandBufferBeginInfo),
+            "Failed to begin command buffer."
+        );
 
         return true;
     }
@@ -753,8 +792,7 @@ public sealed class GraphicsContext : IDisposable
         var frameFinishedSemaphore = _frameFinishedSemaphores![_currentFrameInFlightIndex];
         var frameInFlightFence = _frameInFlightFences![_currentFrameInFlightIndex];
 
-        if (_vk!.EndCommandBuffer(commandBuffer) != Result.Success)
-            throw new Exception("Failed to end command buffer.");
+        RenderHelper.Require(_vk!.EndCommandBuffer(commandBuffer), "Failed to end command buffer.");
 
         var pipelineStageFlags = PipelineStageFlags.ColorAttachmentOutputBit;
         SubmitInfo submitInfo = new()
@@ -769,8 +807,10 @@ public sealed class GraphicsContext : IDisposable
             PSignalSemaphores = &frameFinishedSemaphore,
         };
 
-        if (_vk!.QueueSubmit(_graphicsQueue, 1, &submitInfo, frameInFlightFence) != Result.Success)
-            throw new Exception("Failed to submit command buffer.");
+        RenderHelper.Require(
+            _vk!.QueueSubmit(_graphicsQueue, 1, &submitInfo, frameInFlightFence),
+            "Failed to submit command buffer."
+        );
 
         var swapChain = _swapchain;
         var swapChainImageIndex = _swapchainImageIndex;

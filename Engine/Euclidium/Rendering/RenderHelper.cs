@@ -1,9 +1,11 @@
+using Silk.NET.Vulkan;
+
 namespace Euclidium.Rendering;
 
 /// <summary>
-/// Provides utility functions for disposing render handles.
+/// Provides internal utility functions for rendering.
 /// </summary>
-internal static class DisposeHelper
+internal static class RenderHelper
 {
     /// <summary>
     /// Destroys an array of render handles using the provided destroy function, if they exist.
@@ -40,5 +42,20 @@ internal static class DisposeHelper
             disposable.Dispose();
             disposable = null;
         }
+    }
+
+    /// <summary>
+    /// Throws an exception with the given error message if the result is not success.
+    /// </summary>
+    public static void Require(Result result, string? errorMessage = null) =>
+        Require(result == Result.Success, errorMessage);
+
+    /// <summary>
+    /// Throws an exception with the given error message if the result is not success.
+    /// </summary>
+    public static void Require(bool result, string? errorMessage = null)
+    {
+        if (!result)
+            throw new Exception(errorMessage);
     }
 }

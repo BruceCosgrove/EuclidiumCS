@@ -20,7 +20,7 @@ internal sealed partial class Client
     private Euclidium.Rendering.Framebuffer? _framebuffer;
     private Shader? _slicingShader;
     private Shader? _projectingShader;
-    private VertexBuffer? _vertexBuffer;
+    private readonly VertexBuffer _vertexBuffer = new();
     private IndexBuffer? _cellIndexBuffer;
     private IndexBuffer? _edgeIndexBuffer;
 
@@ -36,7 +36,7 @@ internal sealed partial class Client
     private PropertiesPanel? _propertiesPanel;
     private ViewportPanel? _viewportPanel;
 
-    private Shader? _shader;
+    private readonly Shader _shader = new(); // TODO
 
     protected override void InitializeCallbacks()
     {
@@ -48,7 +48,7 @@ internal sealed partial class Client
         //Window.KeyChange += OnKeyChange;
     }
 
-    private void OnRenderInit()
+    private unsafe void OnRenderInit()
     {
         var context = Engine.Instance.Window.Context;
         var renderPass = context.RenderPass;
@@ -64,17 +64,21 @@ internal sealed partial class Client
 
 
         // Shaders
-        _shader = new("./Resources/Shaders/VulkanBootstrap", renderPass);
+        _shader.Create("./Resources/Shaders/VulkanBootstrap", renderPass);
         //_slicingShader = Shader.Create("./Resources/Shaders/Slicing4D");
         //_projectingShader = Shader.Create("./Resources/Shaders/Projecting4D");
 
-        //// Vertex buffer
-        //var layout = new VertexBufferLayout
-        //([
-        //    new(VertexBufferElementType.Float4),
-        //    new(VertexBufferElementType.Float4),
-        //]);
-        //_vertexBuffer = new(new(layout, MaxVertexCount, BufferUsageARB.StaticDraw));
+        // Vertex buffer
+        float[] vertexBuffer =
+        [
+             0.0f, -0.5f,  1f, 0f, 0f,
+            +0.5f, +0.5f,  0f, 1f, 0f,
+            -0.5f, +0.5f,  0f, 0f, 1f,
+        ];
+
+        _vertexBuffer.Create((ulong)vertexBuffer.Length * sizeof(float));
+        fixed (void* vertexBufferPtr = vertexBuffer)
+            _vertexBuffer.SetData(vertexBufferPtr, _vertexBuffer.Size);
 
         //// Index buffers
         //_cellIndexBuffer = new(new(DrawElementsType.UnsignedInt, MaxIndexCount, BufferUsageARB.DynamicDraw));
@@ -105,7 +109,7 @@ internal sealed partial class Client
         //_framebuffer!.Dispose();
         //_slicingShader!.Dispose();
         //_projectingShader!.Dispose();
-        //_vertexBuffer!.Dispose();
+        _vertexBuffer!.Dispose();
         //_cellIndexBuffer!.Dispose();
         //_edgeIndexBuffer!.Dispose();
 
@@ -127,6 +131,7 @@ internal sealed partial class Client
     private void OnRender(double deltaTime)
     {
         _shader!.Bind();
+        _vertexBuffer!.Bind();
         Window.Context.Draw(); // TODO
 
         //if (!_viewportPanel!.Enabled)

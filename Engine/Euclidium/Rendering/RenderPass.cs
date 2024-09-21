@@ -33,7 +33,7 @@ public sealed class RenderPass : IDisposable
         var vk = context.VK;
         var device = context.Device;
 
-        DisposeHelper.Dispose(ref _renderPass, handle => vk.DestroyRenderPass(device, handle, null));
+        RenderHelper.Dispose(ref _renderPass, handle => vk.DestroyRenderPass(device, handle, null));
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

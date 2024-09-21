@@ -1,6 +1,7 @@
 using Euclidium.Core;
 using Silk.NET.Core.Native;
 using Silk.NET.Shaderc;
+using Silk.NET.SPIRV.Reflect;
 using Silk.NET.Vulkan;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -24,7 +25,7 @@ public sealed class Shader : IDisposable
 
     public RenderPass RenderPass => _renderPass!;
 
-    public Shader(string filepath, RenderPass renderPass)
+    public void Create(string filepath, RenderPass renderPass)
     {
         try
         {
@@ -34,8 +35,11 @@ public sealed class Shader : IDisposable
             // Get each shader stage binary.
             GetStageBinaries(stages);
 
+            // Get info about each stage.
+            GetStageInfo(stages, out var inputDescriptions, out var stride);
+
             // Create the pipeline.
-            CreatePipeline(stages, renderPass);
+            CreatePipeline(stages, inputDescriptions, stride, renderPass);
         }
         catch
         {
@@ -52,8 +56,8 @@ public sealed class Shader : IDisposable
         var vk = context.VK;
         var device = context.Device;
 
-        DisposeHelper.Dispose(ref _pipeline, handle => vk.DestroyPipeline(device, _pipeline, null));
-        DisposeHelper.Dispose(ref _pipelineLayout, handle => vk.DestroyPipelineLayout(device, _pipelineLayout, null));
+        RenderHelper.Dispose(ref _pipeline, handle => vk.DestroyPipeline(device, _pipeline, null));
+        RenderHelper.Dispose(ref _pipelineLayout, handle => vk.DestroyPipelineLayout(device, _pipelineLayout, null));
 
         _renderPass = null;
     }
@@ -132,13 +136,68 @@ public sealed class Shader : IDisposable
         shaderc.CompileOptionsRelease(options);
         shaderc.CompilerRelease(compiler);
 
-        if (status != CompilationStatus.Success)
-            throw new Exception($"Failed to compile {errorMessage}");
+        RenderHelper.Require(status == CompilationStatus.Success, $"Failed to compile {errorMessage}");
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private unsafe void CreatePipeline(ShaderStage[] stages, RenderPass renderPass)
-    {
+    private unsafe void GetStageInfo(
+        ShaderStage[] stages,
+        out VertexInputAttributeDescription[] inputDescriptions,
+        out uint stride
+    ) {
+        using var reflect = Reflect.GetApi();
+
+        ref var stage = ref stages[0];
+
+        ReflectShaderModule module;
+        fixed (byte* binary = stage.Binary)
+        RenderHelper.Require(
+            reflect.CreateShaderModule((nuint)stage.Binary!.Length, binary, &module) == Silk.NET.SPIRV.Reflect.Result.Success
+        );
+
+        // For some reason, the spirv reflect inputs are out of order,
+        // with location 0 being at the end instead of the beginning.
+        var inputs = new nint[module.InputVariableCount];
+        Marshal.Copy((nint)module.InputVariables, inputs, 0, (int)module.InputVariableCount);
+        inputs = [..inputs.OrderBy(a => (int)((InterfaceVariable*)a)->Location)];
+
+        inputDescriptions = new VertexInputAttributeDescription[module.InputVariableCount];
+
+        uint offset = 0;
+        for (uint i = 0; i < inputs.Length; ++i)
+        {
+            ref var input = ref *(InterfaceVariable*)inputs[i];
+
+            // TODO: I don't think this accounts for matrix location alignment.
+            uint componentSize = input.Numeric.Scalar.Width / 8;
+            uint componentCount = input.Numeric.Vector.ComponentCount;
+
+            offset += (componentSize - offset) % componentSize; // alignment
+
+            inputDescriptions[i] = new()
+            {
+                Location = input.Location,
+                Binding = 0, // TODO
+                // The formats are airectly castable format since all the enum values are the same.
+                Format = (Silk.NET.Vulkan.Format)input.Format,
+                Offset = offset,
+            };
+
+            offset += componentSize * componentCount;
+        }
+
+        reflect.DestroyShaderModule(&module);
+
+        stride = offset;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private unsafe void CreatePipeline(
+        ShaderStage[] stages,
+        VertexInputAttributeDescription[] inputDescriptions,
+        uint stride,
+        RenderPass renderPass
+    ) {
         var context = Engine.Instance.Window.Context;
         var vk = context.VK;
         var device = context.Device;
@@ -164,8 +223,10 @@ public sealed class Shader : IDisposable
                         PCode = (uint*)binaryPtr,
                     };
 
-                    if (vk.CreateShaderModule(device, &shaderModuleCreateInfo, null, out modules[i]) != Result.Success)
-                        throw new Exception("Failed to create shader module.");
+                    RenderHelper.Require(
+                        vk.CreateShaderModule(device, &shaderModuleCreateInfo, null, out modules[i]),
+                        "Failed to create shader module."
+                    );
                 }
 
                 pipelineShaderStageCreateInfos[i] = new()
@@ -177,122 +238,137 @@ public sealed class Shader : IDisposable
                 };
             }
 
-            PipelineVertexInputStateCreateInfo pipelineVertexInputStateCreateInfo = new()
+            // TODO
+            VertexInputBindingDescription vertexInputBindingDescription = new()
             {
-                SType = StructureType.PipelineVertexInputStateCreateInfo,
-                VertexBindingDescriptionCount = 0, // TODO
-                PVertexBindingDescriptions = null, // TODO
-                VertexAttributeDescriptionCount = 0, // TODO
-                PVertexAttributeDescriptions = null, // TODO
+                Binding = 0,
+                Stride = stride,
+                InputRate = VertexInputRate.Vertex,
             };
 
-            PipelineInputAssemblyStateCreateInfo pipelineInputAssemblyStateCreateInfo = new()
+            fixed (VertexInputAttributeDescription* inputDescriptionsPtr = inputDescriptions)
             {
-                SType = StructureType.PipelineInputAssemblyStateCreateInfo,
-                Topology = PrimitiveTopology.TriangleList, // TODO
-                PrimitiveRestartEnable = false, // TODO
-            };
-
-            PipelineViewportStateCreateInfo pipelineViewportStateCreateInfo = new()
-            {
-                SType = StructureType.PipelineViewportStateCreateInfo,
-                ViewportCount = 1, // TODO (e.g. vr support with multiviewport rendering (for each eye))
-                ScissorCount = 1, // TODO (in which case, I imagine the viewport wouldn't resize)
-            };
-
-            PipelineRasterizationStateCreateInfo pipelineRasterizationStateCreateInfo = new()
-            {
-                SType = StructureType.PipelineRasterizationStateCreateInfo,
-                DepthClampEnable = false, // TODO
-                RasterizerDiscardEnable = false, // TODO (check shader for "discard;" statement?)
-                PolygonMode = PolygonMode.Fill, // TODO (things like wireframe)
-                CullMode = CullModeFlags.BackBit, // TODO
-                FrontFace = FrontFace.Clockwise, // TODO
-                DepthBiasEnable = false, // TODO: 3 other parameters (all for depth bias)
-                LineWidth = 1f, // TODO
-            };
-
-            PipelineMultisampleStateCreateInfo pipelineMultisampleStateCreateInfo = new()
-            {
-                SType = StructureType.PipelineMultisampleStateCreateInfo,
-                RasterizationSamples = SampleCountFlags.Count1Bit, // TODO
-                SampleShadingEnable = false, // TODO
-                // TODO: 4 other parameters
-            };
-
-            PipelineColorBlendAttachmentState pipelineColorBlendAttachmentState = new()
-            {
-                BlendEnable = false, // TODO
-                // TODO: 6 other parameters
-                ColorWriteMask =
-                    ColorComponentFlags.RBit |
-                    ColorComponentFlags.GBit |
-                    ColorComponentFlags.BBit |
-                    ColorComponentFlags.ABit,
-            };
-
-            PipelineColorBlendStateCreateInfo pipelineColorBlendStateCreateInfo = new()
-            {
-                SType = StructureType.PipelineColorBlendStateCreateInfo,
-                LogicOpEnable = false, // TODO
-                LogicOp = LogicOp.Copy, // TODO
-                AttachmentCount = 1, // TODO
-                PAttachments = &pipelineColorBlendAttachmentState, // TODO
-                // TODO: 1 other parameter
-            };
-
-            PipelineLayoutCreateInfo pipelineLayoutCreateInfo = new()
-            {
-                SType = StructureType.PipelineLayoutCreateInfo,
-                SetLayoutCount = 0, // TODO
-                PSetLayouts = null, // TODO
-                PushConstantRangeCount = 0, // TODO
-                PPushConstantRanges = null, // TODO
-            };
-
-            if (vk.CreatePipelineLayout(device, &pipelineLayoutCreateInfo, null, out _pipelineLayout) != Result.Success)
-                throw new Exception("Failed to create pipeline layout.");
-
-            var dynamicStates = stackalloc[] { DynamicState.Viewport, DynamicState.Scissor }.ToArray(); // TODO
-            fixed (DynamicState* dynamicStatesPtr = dynamicStates)
-            fixed (PipelineShaderStageCreateInfo* pipelineShaderStageCreateInfosPtr = pipelineShaderStageCreateInfos)
-            fixed (Pipeline* pipelinePtr = &_pipeline)
-            {
-                PipelineDynamicStateCreateInfo pipelineDynamicStateCreateInfo = new()
+                PipelineVertexInputStateCreateInfo pipelineVertexInputStateCreateInfo = new()
                 {
-                    SType = StructureType.PipelineDynamicStateCreateInfo,
-                    DynamicStateCount = (uint)dynamicStates.Length,
-                    PDynamicStates = dynamicStatesPtr,
+                    SType = StructureType.PipelineVertexInputStateCreateInfo,
+                    VertexBindingDescriptionCount = 1, // TODO
+                    PVertexBindingDescriptions = &vertexInputBindingDescription, // TODO
+                    VertexAttributeDescriptionCount = (uint)inputDescriptions.Length,
+                    PVertexAttributeDescriptions = inputDescriptionsPtr,
                 };
 
-                GraphicsPipelineCreateInfo pipelineCreateInfo = new()
+                PipelineInputAssemblyStateCreateInfo pipelineInputAssemblyStateCreateInfo = new()
                 {
-                    SType = StructureType.GraphicsPipelineCreateInfo,
-                    StageCount = (uint)stages.Length,
-                    PStages = pipelineShaderStageCreateInfosPtr,
-                    PVertexInputState = &pipelineVertexInputStateCreateInfo,
-                    PInputAssemblyState = &pipelineInputAssemblyStateCreateInfo,
-                    PTessellationState = null, // TODO
-                    PViewportState = &pipelineViewportStateCreateInfo,
-                    PRasterizationState = &pipelineRasterizationStateCreateInfo,
-                    PMultisampleState = &pipelineMultisampleStateCreateInfo,
-                    PDepthStencilState = null, // TODO
-                    PColorBlendState = &pipelineColorBlendStateCreateInfo,
-                    PDynamicState = &pipelineDynamicStateCreateInfo,
-                    Layout = _pipelineLayout,
-                    RenderPass = renderPass.Handle,
-                    Subpass = 0, // TODO
-                    // TODO: 2 other parameters (for recreating the pipeline)
+                    SType = StructureType.PipelineInputAssemblyStateCreateInfo,
+                    Topology = PrimitiveTopology.TriangleList, // TODO
+                    PrimitiveRestartEnable = false, // TODO
                 };
 
-                if (vk.CreateGraphicsPipelines(device, default, 1, &pipelineCreateInfo, null, pipelinePtr) != Result.Success)
-                    throw new Exception("Failed to create pipeline.");
+                PipelineViewportStateCreateInfo pipelineViewportStateCreateInfo = new()
+                {
+                    SType = StructureType.PipelineViewportStateCreateInfo,
+                    ViewportCount = 1, // TODO (e.g. vr support with multiviewport rendering (for each eye))
+                    ScissorCount = 1, // TODO (in which case, I imagine the viewport wouldn't resize)
+                };
+
+                PipelineRasterizationStateCreateInfo pipelineRasterizationStateCreateInfo = new()
+                {
+                    SType = StructureType.PipelineRasterizationStateCreateInfo,
+                    DepthClampEnable = false, // TODO
+                    RasterizerDiscardEnable = false, // TODO (check shader for "discard;" statement?)
+                    PolygonMode = PolygonMode.Fill, // TODO (things like wireframe)
+                    CullMode = CullModeFlags.BackBit, // TODO
+                    FrontFace = FrontFace.Clockwise, // TODO
+                    DepthBiasEnable = false, // TODO: 3 other parameters (all for depth bias)
+                    LineWidth = 1f, // TODO
+                };
+
+                PipelineMultisampleStateCreateInfo pipelineMultisampleStateCreateInfo = new()
+                {
+                    SType = StructureType.PipelineMultisampleStateCreateInfo,
+                    RasterizationSamples = SampleCountFlags.Count1Bit, // TODO
+                    SampleShadingEnable = false, // TODO
+                    // TODO: 4 other parameters
+                };
+
+                PipelineColorBlendAttachmentState pipelineColorBlendAttachmentState = new()
+                {
+                    BlendEnable = false, // TODO
+                    // TODO: 6 other parameters
+                    ColorWriteMask =
+                        ColorComponentFlags.RBit |
+                        ColorComponentFlags.GBit |
+                        ColorComponentFlags.BBit |
+                        ColorComponentFlags.ABit,
+                };
+
+                PipelineColorBlendStateCreateInfo pipelineColorBlendStateCreateInfo = new()
+                {
+                    SType = StructureType.PipelineColorBlendStateCreateInfo,
+                    LogicOpEnable = false, // TODO
+                    LogicOp = LogicOp.Copy, // TODO
+                    AttachmentCount = 1, // TODO
+                    PAttachments = &pipelineColorBlendAttachmentState, // TODO
+                    // TODO: 1 other parameter
+                };
+
+                PipelineLayoutCreateInfo pipelineLayoutCreateInfo = new()
+                {
+                    SType = StructureType.PipelineLayoutCreateInfo,
+                    SetLayoutCount = 0, // TODO
+                    PSetLayouts = null, // TODO
+                    PushConstantRangeCount = 0, // TODO
+                    PPushConstantRanges = null, // TODO
+                };
+
+                RenderHelper.Require(
+                    vk.CreatePipelineLayout(device, &pipelineLayoutCreateInfo, null, out _pipelineLayout),
+                    "Failed to create pipeline layout."
+                );
+
+                var dynamicStates = stackalloc[] { DynamicState.Viewport, DynamicState.Scissor }.ToArray(); // TODO
+                fixed (DynamicState* dynamicStatesPtr = dynamicStates)
+                fixed (PipelineShaderStageCreateInfo* pipelineShaderStageCreateInfosPtr = pipelineShaderStageCreateInfos)
+                fixed (Pipeline* pipelinePtr = &_pipeline)
+                {
+                    PipelineDynamicStateCreateInfo pipelineDynamicStateCreateInfo = new()
+                    {
+                        SType = StructureType.PipelineDynamicStateCreateInfo,
+                        DynamicStateCount = (uint)dynamicStates.Length,
+                        PDynamicStates = dynamicStatesPtr,
+                    };
+
+                    GraphicsPipelineCreateInfo pipelineCreateInfo = new()
+                    {
+                        SType = StructureType.GraphicsPipelineCreateInfo,
+                        StageCount = (uint)stages.Length,
+                        PStages = pipelineShaderStageCreateInfosPtr,
+                        PVertexInputState = &pipelineVertexInputStateCreateInfo,
+                        PInputAssemblyState = &pipelineInputAssemblyStateCreateInfo,
+                        PTessellationState = null, // TODO
+                        PViewportState = &pipelineViewportStateCreateInfo,
+                        PRasterizationState = &pipelineRasterizationStateCreateInfo,
+                        PMultisampleState = &pipelineMultisampleStateCreateInfo,
+                        PDepthStencilState = null, // TODO
+                        PColorBlendState = &pipelineColorBlendStateCreateInfo,
+                        PDynamicState = &pipelineDynamicStateCreateInfo,
+                        Layout = _pipelineLayout,
+                        RenderPass = renderPass.Handle,
+                        Subpass = 0, // TODO
+                        // TODO: 2 other parameters (for recreating the pipeline)
+                    };
+
+                    RenderHelper.Require(
+                        vk.CreateGraphicsPipelines(device, default, 1, &pipelineCreateInfo, null, pipelinePtr),
+                        "Failed to create pipeline."
+                    );
+                }
             }
         }
         finally
         {
             SilkMarshal.Free((nint)entrypointName);
-            DisposeHelper.Dispose(ref modules, handle => vk.DestroyShaderModule(device, handle, null));
+            RenderHelper.Dispose(ref modules, handle => vk.DestroyShaderModule(device, handle, null));
         }
     }
 
