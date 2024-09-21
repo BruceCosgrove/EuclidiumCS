@@ -1,4 +1,4 @@
-﻿namespace Euclidium.Core;
+namespace Euclidium.Core;
 
 public sealed partial class Engine
 {
@@ -10,12 +10,12 @@ public sealed partial class Engine
     private readonly int _mainThreadID;
 
     public Window Window => _window;
-    private readonly Window _window;
+    private readonly Window _window = new();
 
     private Engine()
     {
         _mainThreadID = Environment.CurrentManagedThreadId;
-        _window = new();
+        _window.Create();
     }
 
     // Used by Client to start the engine.

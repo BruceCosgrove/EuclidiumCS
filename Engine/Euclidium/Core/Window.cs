@@ -8,9 +8,10 @@ namespace Euclidium.Core;
 
 public sealed class Window
 {
-    private readonly IWindow _window;
+    private IWindow? _window;
     private IInputContext? _inputContext;
     private GraphicsContext? _graphicsContext;
+    private bool _rendering = true;
 
     //private ImGuiController? _imguiController;
     // TODO: The ImGuiController does not do anything about cursors.
@@ -58,9 +59,9 @@ public sealed class Window
     public IKeyboard Keyboard => _inputContext!.Keyboards[0];
     public IMouse Mouse => _inputContext!.Mice[0];
 
-    public Vector2D<int> Size => _window.Size;
+    public Vector2D<int> Size => _window!.Size;
 
-    public Vector2D<int> FramebufferSize => _window.FramebufferSize;
+    public Vector2D<int> FramebufferSize => _window!.FramebufferSize;
 
     public CursorMode CursorMode
     {
@@ -76,7 +77,7 @@ public sealed class Window
         }
     }
 
-    internal Window()
+    internal void Create()
     {
         // Require GLFW.
         var platform = Silk.NET.Windowing.Window.Platforms.FirstOrDefault(x => x.GetType().FullName == "Silk.NET.Windowing.Sdl.SdlPlatform");
@@ -93,6 +94,7 @@ public sealed class Window
         _window = Silk.NET.Windowing.Window.Create(WindowOptions.DefaultVulkan with
         {
             Title = "EuclidiumCS - Vulkan Transition",
+            IsVisible = false,
             //WindowState = WindowState.Fullscreen,
             //WindowState = WindowState.Maximized,
             //WindowBorder = WindowBorder.Hidden,
@@ -103,24 +105,23 @@ public sealed class Window
         _window.Render += OnRender;
         _window.Resize += OnResize;
         _window.FramebufferResize += OnFramebufferResize;
+        _window.StateChanged += OnStateChanged;
     }
 
     internal void Run()
     {
-        _window.Run();
-        _window.Dispose();
+        _window!.Run();
+        _window!.Dispose();
     }
 
-    public void Close() => _window.Close();
+    public void Close() => _window!.Close();
 
     private void OnLoad()
     {
-        // Center the window first.
-        // TODO: This is a race condition.
-        _window.Center();
+        _window!.Center();
 
         // Create input and add event handlers.
-        _inputContext = _window.CreateInput();
+        _inputContext = _window!.CreateInput();
 
         foreach (var keyboard in _inputContext.Keyboards)
         {
@@ -137,7 +138,7 @@ public sealed class Window
 
         // Create graphics context.
         _graphicsContext = new();
-        _graphicsContext.Create(_window);
+        _graphicsContext.Create(_window!);
 
         // Create ImGui context.
         // TODO: Rewrite ImGuiController (name it ImGuiContext) using imgui's vulkan backend as an example.
@@ -182,8 +183,10 @@ public sealed class Window
         //}
 
         RenderInit?.Invoke();
-        WindowResize?.Invoke(_window.Size);
-        WindowFramebufferResize?.Invoke(_window.FramebufferSize);
+        WindowResize?.Invoke(_window!.Size);
+        WindowFramebufferResize?.Invoke(_window!.FramebufferSize);
+
+        _window!.IsVisible = true;
     }
 
     private void OnClosing()
@@ -212,7 +215,7 @@ public sealed class Window
 
     private void OnRender(double deltaTime)
     {
-        if (_window.WindowState != WindowState.Minimized && _graphicsContext!.BeginFrame())
+        if (_rendering && _graphicsContext!.BeginFrame())
         {
             Render?.Invoke(deltaTime);
 
@@ -235,8 +238,14 @@ public sealed class Window
     private void OnResize(Vector2D<int> size) =>
         WindowResize?.Invoke(size);
 
-    private void OnFramebufferResize(Vector2D<int> size) =>
+    private void OnFramebufferResize(Vector2D<int> size)
+    {
+        _rendering = size.X != 0 && size.Y != 0;
         WindowFramebufferResize?.Invoke(size);
+    }
+
+    private void OnStateChanged(WindowState state) =>
+        _rendering = state != WindowState.Minimized;
 
     private void OnKeyDown(IKeyboard keyboard, Key key, int scancode) =>
         KeyChange?.Invoke(key, true);
