@@ -85,10 +85,7 @@ public sealed class Window
             Silk.NET.Windowing.Window.Remove(platform);
         platform = Silk.NET.Windowing.Window.Platforms.FirstOrDefault(x => x.GetType().FullName == "Silk.NET.Windowing.Glfw.GlfwPlatform");
         if (platform == null)
-        {
-            Console.Error.WriteLine("GLFW is required.");
-            Environment.Exit(1);
-        }
+            throw new Exception("GLFW is required.");
 
         // Create the window and add event handlers.
         _window = Silk.NET.Windowing.Window.Create(WindowOptions.DefaultVulkan with
