@@ -278,7 +278,7 @@ public sealed class Shader : IDisposable
                     RasterizerDiscardEnable = false, // TODO (check shader for "discard;" statement?)
                     PolygonMode = PolygonMode.Fill, // TODO (things like wireframe)
                     CullMode = CullModeFlags.BackBit, // TODO
-                    FrontFace = FrontFace.Clockwise, // TODO
+                    FrontFace = FrontFace.CounterClockwise, // TODO
                     DepthBiasEnable = false, // TODO: 3 other parameters (all for depth bias)
                     LineWidth = 1f, // TODO
                 };

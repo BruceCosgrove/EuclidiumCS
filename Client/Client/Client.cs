@@ -71,9 +71,9 @@ internal sealed partial class Client
         // Vertex buffer
         float[] vertexBuffer =
         [
-             0.0f, -0.5f,  1f, 0f, 0f,
-            +0.5f, +0.5f,  0f, 1f, 0f,
             -0.5f, +0.5f,  0f, 0f, 1f,
+            +0.5f, +0.5f,  0f, 1f, 0f,
+             0.0f, -0.5f,  1f, 0f, 0f,
         ];
 
         _vertexBuffer.Create((ulong)vertexBuffer.Length * sizeof(float));
