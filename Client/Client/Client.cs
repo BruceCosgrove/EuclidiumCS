@@ -20,7 +20,7 @@ internal sealed partial class Client
     private Euclidium.Rendering.Framebuffer? _framebuffer;
     private Shader? _slicingShader;
     private Shader? _projectingShader;
-    private readonly VertexBuffer _vertexBuffer = new();
+    private readonly StaticVertexBuffer _vertexBuffer = new(); // TODO: make dynamic
     private IndexBuffer? _cellIndexBuffer;
     private IndexBuffer? _edgeIndexBuffer;
 
