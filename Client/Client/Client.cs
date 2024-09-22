@@ -20,7 +20,7 @@ internal sealed partial class Client
     private Euclidium.Rendering.Framebuffer? _framebuffer;
     private Shader? _slicingShader;
     private Shader? _projectingShader;
-    private readonly StaticVertexBuffer _vertexBuffer = new(); // TODO: make dynamic
+    private readonly VertexBuffer _vertexBuffer = new();
     //private IndexBuffer? _cellIndexBuffer;
     //private IndexBuffer? _edgeIndexBuffer;
 
@@ -37,7 +37,7 @@ internal sealed partial class Client
     private ViewportPanel? _viewportPanel;
 
     private readonly Shader _shader = new(); // TODO
-    private readonly StaticIndexBuffer _indexBuffer = new(); // TODO
+    private readonly IndexBuffer _indexBuffer = new(); // TODO
 
     protected override void InitializeCallbacks()
     {
@@ -77,7 +77,7 @@ internal sealed partial class Client
             -0.5f, -0.5f,  0f, 1f, 0f,
         ];
 
-        _vertexBuffer.Create((ulong)vertexBuffer.Length * sizeof(float));
+        _vertexBuffer.Create((ulong)vertexBuffer.Length * sizeof(float), BufferUsage.Static);
         fixed (void* vertexBufferPtr = vertexBuffer)
             _vertexBuffer.SetData(vertexBufferPtr, _vertexBuffer.Size);
 
@@ -87,7 +87,7 @@ internal sealed partial class Client
             0, 1, 2,
             2, 3, 0,
         ];
-        _indexBuffer.Create((ulong)indexBuffer.Length * sizeof(ushort), IndexBufferType.UInt16);
+        _indexBuffer.Create((ulong)indexBuffer.Length * sizeof(ushort), BufferUsage.Static, IndexBufferType.UInt16);
         fixed (void* indexBufferPtr = indexBuffer)
             _indexBuffer.SetData(indexBufferPtr, _indexBuffer.Size);
 

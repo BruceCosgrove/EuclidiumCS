@@ -3,9 +3,9 @@ using Silk.NET.Vulkan;
 
 namespace Euclidium.Rendering;
 
-public abstract class DynamicBuffer : Buffer
+internal class DynamicBuffer : Buffer
 {
-    protected void Create(ulong size, BufferUsageFlags usage)
+    public override void Create(ulong size, BufferUsageFlags usage)
     {
         try
         {

@@ -5,18 +5,46 @@ using System.Runtime.CompilerServices;
 
 namespace Euclidium.Rendering;
 
-public abstract class Buffer : IDisposable
+// A temporary staging buffer is good for buffers whose contents don't change,
+// e.g. a complex 3D model. However, for dynamic buffers, e.g. in my typical
+// batch renderers, the buffers are recreated each frame, which I believe
+// would instead lose performance from the extra step of the staging buffer,
+// including ImGui. Hence, both types are provided.
+public enum BufferUsage
+{
+    Static,
+    Dynamic,
+}
+
+public interface IBuffer : IDisposable
+{
+    void Bind();
+
+    unsafe void SetData(void* data, ulong size, ulong offset = 0);
+}
+
+internal abstract class Buffer : IDisposable
 {
     protected Silk.NET.Vulkan.Buffer _buffer;
     protected DeviceMemory _memory;
-
     protected ulong _size;
 
-    public ulong Size => _size;
+    internal Silk.NET.Vulkan.Buffer Handle => _buffer;
+    internal ulong Size => _size;
+
+    public static Buffer Select(BufferUsage usage)
+    {
+        return usage switch
+        {
+            BufferUsage.Static => new StaticBuffer(),
+            BufferUsage.Dynamic => new DynamicBuffer(),
+            _ => throw new Exception("Unknown buffer usage."),
+        };
+    }
+
+    public abstract void Create(ulong size, BufferUsageFlags usage);
 
     public abstract void Dispose();
-
-    public abstract void Bind();
 
     public abstract unsafe void SetData(void* data, ulong size, ulong offset = 0);
 

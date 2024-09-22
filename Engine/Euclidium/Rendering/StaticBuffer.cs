@@ -3,15 +3,9 @@ using Silk.NET.Vulkan;
 
 namespace Euclidium.Rendering;
 
-public abstract class StaticBuffer : Buffer
+internal class StaticBuffer : Buffer
 {
-    // A temporary staging buffer is good for buffers whose contents don't change,
-    // e.g. a complex 3D model that's rendered at most a few times per frame.
-    // However, for dynamic buffers, e.g. in my typical batch renderers, the
-    // buffers are recreated each frame, which I believe would instead lose
-    // performance from the extra step of the staging buffer (including ImGui).
-
-    protected void Create(ulong size, BufferUsageFlags usage)
+    public override void Create(ulong size, BufferUsageFlags usage)
     {
         try
         {
