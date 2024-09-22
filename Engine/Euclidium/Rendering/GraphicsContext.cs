@@ -75,13 +75,14 @@ public sealed class GraphicsContext : IDisposable
     private uint _swapchainImageIndex;
     private uint _currentFrameInFlightIndex;
 
-    public Vk VK => _vk!;
-    public Instance Instance => _instance!;
-    public PhysicalDevice PhysicalDevice => _physicalDevice!;
-    public Device Device => _device!;
-    public Extent2D SwapchainImageExtent => _swapchainImageExtent!;
-    public RenderPass RenderPass => _renderPass!;
-    public CommandBuffer CommandBuffer => _commandBuffers![_currentFrameInFlightIndex];
+    internal Vk VK => _vk!;
+    internal PhysicalDevice PhysicalDevice => _physicalDevice!;
+    internal Device Device => _device!;
+    internal Queue GraphicsQueue => _graphicsQueue!;
+    internal Extent2D SwapchainImageExtent => _swapchainImageExtent!;
+    internal RenderPass RenderPass => _renderPass!;
+    internal CommandPool CommandPool => _commandPool!;
+    internal CommandBuffer CommandBuffer => _commandBuffers![_currentFrameInFlightIndex];
 
     public unsafe void Create(IWindow window)
     {

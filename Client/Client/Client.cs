@@ -51,7 +51,6 @@ internal sealed partial class Client
     private unsafe void OnRenderInit()
     {
         var context = Engine.Instance.Window.Context;
-        var renderPass = context.RenderPass;
 
         //// Framebuffer
         //Euclidium.Rendering.Framebuffer.Create(new()
@@ -64,7 +63,7 @@ internal sealed partial class Client
 
 
         // Shaders
-        _shader.Create("./Resources/Shaders/VulkanBootstrap", renderPass);
+        _shader.Create("./Resources/Shaders/VulkanBootstrap");
         //_slicingShader = Shader.Create("./Resources/Shaders/Slicing4D");
         //_projectingShader = Shader.Create("./Resources/Shaders/Projecting4D");
 

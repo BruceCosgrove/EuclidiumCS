@@ -25,6 +25,14 @@ public sealed class Shader : IDisposable
 
     public RenderPass RenderPass => _renderPass!;
 
+    public void Create(string filepath)
+    {
+        var context = Engine.Instance.Window.Context;
+        var renderPass = context.RenderPass;
+
+        Create(filepath, renderPass);
+    }
+
     public void Create(string filepath, RenderPass renderPass)
     {
         try
