@@ -16,16 +16,7 @@ public abstract class Buffer : IDisposable
 
     public abstract void Dispose();
 
-    public unsafe void Bind()
-    {
-        var context = Engine.Instance.Window.Context;
-        var vk = context.VK;
-        var commandBuffer = context.CommandBuffer;
-
-        var buffer = _buffer;
-        ulong offset = 0;
-        vk.CmdBindVertexBuffers(commandBuffer, 0, 1, &buffer, &offset);
-    }
+    public abstract void Bind();
 
     public abstract unsafe void SetData(void* data, ulong size, ulong offset = 0);
 

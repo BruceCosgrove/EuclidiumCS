@@ -851,7 +851,8 @@ public sealed class GraphicsContext : IDisposable
         var commandBuffer = _commandBuffers![_currentFrameInFlightIndex];
 
         BeginRenderPass();
-        _vk!.CmdDraw(commandBuffer, 3, 1, 0, 0);
+        //_vk!.CmdDraw(commandBuffer, 6, 1, 0, 0);
+        _vk!.CmdDrawIndexed(commandBuffer, 6, 1, 0, 0, 0);
         EndRenderPass();
     }
 

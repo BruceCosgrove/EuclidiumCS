@@ -21,8 +21,8 @@ internal sealed partial class Client
     private Shader? _slicingShader;
     private Shader? _projectingShader;
     private readonly StaticVertexBuffer _vertexBuffer = new(); // TODO: make dynamic
-    private IndexBuffer? _cellIndexBuffer;
-    private IndexBuffer? _edgeIndexBuffer;
+    //private IndexBuffer? _cellIndexBuffer;
+    //private IndexBuffer? _edgeIndexBuffer;
 
     private const int MaxVertexCount = 1024 * 1024; // 4 MiB
     private const int MaxIndexCount = 1024 * 1024; // 4 MiB
@@ -37,6 +37,7 @@ internal sealed partial class Client
     private ViewportPanel? _viewportPanel;
 
     private readonly Shader _shader = new(); // TODO
+    private readonly StaticIndexBuffer _indexBuffer = new(); // TODO
 
     protected override void InitializeCallbacks()
     {
@@ -70,14 +71,25 @@ internal sealed partial class Client
         // Vertex buffer
         float[] vertexBuffer =
         [
-            -0.5f, +0.5f,  0f, 0f, 1f,
-            +0.5f, +0.5f,  0f, 1f, 0f,
-             0.0f, -0.5f,  1f, 0f, 0f,
+            -0.5f, +0.5f,  0f, 0f, 0f,
+            +0.5f, +0.5f,  1f, 0f, 0f,
+            +0.5f, -0.5f,  1f, 1f, 0f,
+            -0.5f, -0.5f,  0f, 1f, 0f,
         ];
 
         _vertexBuffer.Create((ulong)vertexBuffer.Length * sizeof(float));
         fixed (void* vertexBufferPtr = vertexBuffer)
             _vertexBuffer.SetData(vertexBufferPtr, _vertexBuffer.Size);
+
+        // Index buffer
+        ushort[] indexBuffer =
+        [
+            0, 1, 2,
+            2, 3, 0,
+        ];
+        _indexBuffer.Create((ulong)indexBuffer.Length * sizeof(ushort), IndexBufferType.UInt16);
+        fixed (void* indexBufferPtr = indexBuffer)
+            _indexBuffer.SetData(indexBufferPtr, _indexBuffer.Size);
 
         //// Index buffers
         //_cellIndexBuffer = new(new(DrawElementsType.UnsignedInt, MaxIndexCount, BufferUsageARB.DynamicDraw));
@@ -113,6 +125,7 @@ internal sealed partial class Client
         //_edgeIndexBuffer!.Dispose();
 
         _shader!.Dispose();
+        _indexBuffer!.Dispose();
     }
 
     private void OnUpdate(double deltaTime)
@@ -131,6 +144,7 @@ internal sealed partial class Client
     {
         _shader!.Bind();
         _vertexBuffer!.Bind();
+        _indexBuffer!.Bind();
         Window.Context.Draw(); // TODO
 
         //if (!_viewportPanel!.Enabled)
