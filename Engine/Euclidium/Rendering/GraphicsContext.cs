@@ -53,7 +53,7 @@ public sealed class GraphicsContext : IDisposable
     private PhysicalDevice _physicalDevice;
     private Device _device;
     private Queue _graphicsQueue;
-    private Queue _presentationQueue;
+    private Queue _presentQueue;
     private KhrSwapchain? _khrSwapchain;
     private SwapchainKHR _swapchain;
     private Image[]? _swapchainImages;
@@ -454,12 +454,12 @@ public sealed class GraphicsContext : IDisposable
 
             RenderHelper.Require(
                 _vk!.CreateDevice(_physicalDevice, &deviceCreateInfo, null, out _device),
-                "Failed to create device"
+                "Failed to create device."
             );
         }
 
         _vk!.GetDeviceQueue(_device, graphicsFamily, 0, out _graphicsQueue);
-        _vk!.GetDeviceQueue(_device, presentationFamily, 0, out _presentationQueue);
+        _vk!.GetDeviceQueue(_device, presentationFamily, 0, out _presentQueue);
     }
 
     // Explicitly NOT aggressively inlined because the swap chain
@@ -825,7 +825,7 @@ public sealed class GraphicsContext : IDisposable
             PImageIndices = &swapChainImageIndex,
         };
 
-        switch (_khrSwapchain!.QueuePresent(_presentationQueue, &presentInfoKHR))
+        switch (_khrSwapchain!.QueuePresent(_presentQueue, &presentInfoKHR))
         {
             case Result.ErrorOutOfDateKhr:
             case Result.SuboptimalKhr:
