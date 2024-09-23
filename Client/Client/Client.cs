@@ -76,10 +76,11 @@ internal sealed partial class Client
             +0.5f, -0.5f,  1f, 1f, 0f,
             -0.5f, -0.5f,  0f, 1f, 0f,
         ];
+        ulong vertexBufferSize = (ulong)vertexBuffer.Length * sizeof(float);
 
-        _vertexBuffer.Create((ulong)vertexBuffer.Length * sizeof(float), BufferUsage.Static);
+        _vertexBuffer.Create(vertexBufferSize, BufferUsage.Static);
         fixed (void* vertexBufferPtr = vertexBuffer)
-            _vertexBuffer.SetData(vertexBufferPtr, _vertexBuffer.Size);
+            _vertexBuffer.SetData(vertexBufferPtr, vertexBufferSize);
 
         // Index buffer
         ushort[] indexBuffer =
@@ -87,9 +88,11 @@ internal sealed partial class Client
             0, 1, 2,
             2, 3, 0,
         ];
-        _indexBuffer.Create((ulong)indexBuffer.Length * sizeof(ushort), BufferUsage.Static, IndexBufferType.UInt16);
+        ulong indexBufferSize = (ulong)indexBuffer.Length * sizeof(ushort);
+
+        _indexBuffer.Create(indexBufferSize, BufferUsage.Static, IndexBufferType.UInt16);
         fixed (void* indexBufferPtr = indexBuffer)
-            _indexBuffer.SetData(indexBufferPtr, _indexBuffer.Size);
+            _indexBuffer.SetData(indexBufferPtr, indexBufferSize);
 
         //// Index buffers
         //_cellIndexBuffer = new(new(DrawElementsType.UnsignedInt, MaxIndexCount, BufferUsageARB.DynamicDraw));

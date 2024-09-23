@@ -48,42 +48,15 @@ internal abstract class Buffer : IDisposable
 
     public abstract unsafe void SetData(void* data, ulong size, ulong offset = 0);
 
-    protected unsafe void CopyData(void* data, ulong size, ulong offset, DeviceMemory dstMemory, bool flush)
+    [Conditional("DEBUG")]
+    protected void AssertSizeOffsetBounded(ulong size, ulong offset)
     {
         Debug.Assert(0 < size && size <= _size);
         Debug.Assert(offset < _size);
         Debug.Assert(offset + size <= _size);
-
-        var context = Engine.Instance.Window.Context;
-        var vk = context.VK;
-        var device = context.Device;
-
-        // Copy the memory.
-        void* dstMemoryPtr;
-        RenderHelper.Require(vk.MapMemory(device, dstMemory, offset, size, MemoryMapFlags.None, &dstMemoryPtr));
-        System.Buffer.MemoryCopy(data, dstMemoryPtr, size, size);
-
-        if (flush)
-        {
-            // Tell vulkan to use the new memory instead of cached memory.
-            MappedMemoryRange mappedMemoryRange = new()
-            {
-                SType = StructureType.MappedMemoryRange,
-                Memory = dstMemory,
-                Offset = offset,
-                Size = size,
-            };
-
-            RenderHelper.Require(
-                vk.FlushMappedMemoryRanges(device, 1, &mappedMemoryRange),
-                "Failed to flush mapped memory range for buffer."
-            );
-        }
-
-        vk.UnmapMemory(device, dstMemory);
     }
 
-    protected static unsafe (Silk.NET.Vulkan.Buffer, DeviceMemory) CreateBuffer(ulong size, BufferUsageFlags usage, MemoryPropertyFlags properties)
+    protected static unsafe (Silk.NET.Vulkan.Buffer, DeviceMemory, ulong actualSize) CreateBuffer(ulong size, BufferUsageFlags usage, MemoryPropertyFlags properties)
     {
         var context = Engine.Instance.Window.Context;
         var vk = context.VK;
@@ -91,6 +64,7 @@ internal abstract class Buffer : IDisposable
 
         Silk.NET.Vulkan.Buffer buffer = new();
         DeviceMemory memory = new();
+        ulong actualSize = size;
 
         try
         {
@@ -109,11 +83,12 @@ internal abstract class Buffer : IDisposable
 
             var memoryRequirements = vk.GetBufferMemoryRequirements(device, buffer);
             var memoryTypeIndex = SelectMemoryType(memoryRequirements.MemoryTypeBits, properties);
+            actualSize = memoryRequirements.Size;
 
             MemoryAllocateInfo memoryAllocateInfo = new()
             {
                 SType = StructureType.MemoryAllocateInfo,
-                AllocationSize = memoryRequirements.Size,
+                AllocationSize = actualSize,
                 MemoryTypeIndex = memoryTypeIndex,
             };
 
@@ -134,7 +109,7 @@ internal abstract class Buffer : IDisposable
             throw;
         }
 
-        return (buffer, memory);
+        return (buffer, memory, actualSize);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

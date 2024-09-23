@@ -9,7 +9,7 @@ internal class StaticBuffer : Buffer
     {
         try
         {
-            (_buffer, _memory) = CreateBuffer(
+            (_buffer, _memory, _size) = CreateBuffer(
                 size,
                 BufferUsageFlags.TransferDstBit | usage,
                 MemoryPropertyFlags.DeviceLocalBit
@@ -20,8 +20,6 @@ internal class StaticBuffer : Buffer
             Dispose();
             throw;
         }
-
-        _size = size;
     }
 
     public override unsafe void Dispose()
@@ -36,6 +34,8 @@ internal class StaticBuffer : Buffer
 
     public override unsafe void SetData(void* data, ulong size, ulong offset = 0)
     {
+        AssertSizeOffsetBounded(size, offset);
+
         var context = Engine.Instance.Window.Context;
         var vk = context.VK;
         var device = context.Device;
@@ -48,13 +48,31 @@ internal class StaticBuffer : Buffer
 
         try
         {
-            (stagingBuffer, stagingMemory) = CreateBuffer(
+            (stagingBuffer, stagingMemory, _) = CreateBuffer(
                 size,
                 BufferUsageFlags.TransferSrcBit,
                 MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit
             );
 
-            CopyData(data, size, offset, stagingMemory, true);
+            // Copy the memory.
+            void* mappedMemory;
+            RenderHelper.Require(vk.MapMemory(device, stagingMemory, offset, size, MemoryMapFlags.None, &mappedMemory));
+            System.Buffer.MemoryCopy(data, mappedMemory, size, size);
+
+            // Tell vulkan to use the new memory instead of cached memory.
+            MappedMemoryRange mappedMemoryRange = new()
+            {
+                SType = StructureType.MappedMemoryRange,
+                Memory = stagingMemory,
+                Offset = offset,
+                Size = size,
+            };
+            RenderHelper.Require(
+                vk.FlushMappedMemoryRanges(device, 1, &mappedMemoryRange),
+                "Failed to flush mapped memory range for buffer."
+            );
+
+            vk.UnmapMemory(device, stagingMemory);
 
             CommandBufferAllocateInfo commandBufferAllocateInfo = new()
             {
