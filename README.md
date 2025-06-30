@@ -1,2 +1,4 @@
 # EuclidiumCS
-Backing up my current work on combining C#, ImGui, and OpenGL, to translate to Vulkan, using ImGui's vulkan backend as a reference.
+A combination of C#, ImGui, and ~~OpenGL~~ Vulkan.
+
+Partial showcase of my usage of C#, through the lens of computer graphics.
